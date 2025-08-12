@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>みんなで競馬 - ロビー&オンライン対戦</title>
+  <style>
+    :root{
+      --bg:#0f1221; --panel:#171a2e; --text:#e6e7ff; --muted:#9aa0c7; --accent:#6cf; --accent2:#9f6cff; --ok:#6cff80; --warn:#ffd166; --bad:#ff6c9f;
+      --border:rgba(255,255,255,.08);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;}
+    body{
+      margin:0; background:radial-gradient(1500px 800px at 20% -10%, rgba(159,108,255,.12), transparent 60%),
+      radial-gradient(1200px 900px at 110% 20%, rgba(108,204,255,.10), transparent 60%), var(--bg);
+      color:var(--text); font:15px/1.6 system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      display:grid; grid-template-rows:auto 1fr; gap:14px;
+    }
+    header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); backdrop-filter: blur(6px);}    
+    header h1{margin:0; font-size:18px; letter-spacing:.4px;}
+    header .tag{font-size:12px; color:var(--muted)}
+    main{display:grid; grid-template-columns:400px 1fr; gap:14px; padding:0 14px 14px;}
+    @media (max-width:1024px){ main{grid-template-columns:1fr;}}
+
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00)); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);}
+    .card h2{font-size:15px; margin:0 0 10px 0; letter-spacing:.3px; color:#dfe2ff}
+    .pad{padding:16px}
+    .row{display:flex; gap:10px; align-items:center}
+    .col{display:flex; flex-direction:column; gap:10px}
+    .muted{color:var(--muted)}
+    .code{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;}
+    input, select, button{font:inherit; color:inherit}
+    input[type="text"], input[type="number"], .readonly{
+      width:100%; background:#0e1121; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+      outline:none; transition:.2s border-color, .2s box-shadow;
+    }
+    input[type="text"]:focus, input[type="number"]:focus{border-color:#6cf; box-shadow:0 0 0 3px rgba(108,204,255,.15)}
+    .readonly{opacity:.8}
+    button{
+      background:linear-gradient(180deg, rgba(108,204,255,.25), rgba(108,204,255,.12));
+      border:1px solid rgba(108,204,255,.45); color:#e8f6ff; padding:10px 14px; border-radius:12px; cursor:pointer; transition:.15s transform ease, .2s filter;
+    }
+    button:hover{filter:brightness(1.05)}
+    button:active{transform:translateY(1px)}
+    button.secondary{background:transparent; border:1px solid var(--border);}
+    .danger{background:linear-gradient(180deg, rgba(255,108,159,.2), rgba(255,108,159,.12)); border:1px solid rgba(255,108,159,.45)}
+
+    .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+    .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+
+    .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:1px dashed var(--border); border-radius:999px; color:var(--muted)}
+    .copy{cursor:pointer;}
+    .badge{font-size:12px; padding:2px 8px; border-radius:999px; background:#0c1020; border:1px solid var(--border)}
+
+    #canvasWrap{height:520px; position:relative}
+    canvas{width:100%; height:100%; background:repeating-linear-gradient(90deg, #111430, #111430 14px, #121535 14px, #121535 28px);}    
+    #overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none}
+    #overlay .big{font-size:72px; font-weight:700; text-shadow:0 10px 30px rgba(0,0,0,.4)}
+    #results{position:absolute; right:16px; top:16px; background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:12px; padding:10px; max-width:300px}
+
+    .slider{display:grid; grid-template-columns:100px 1fr 60px; gap:8px; align-items:center}
+    input[type=range]{width:100%}
+    .colorBox{width:36px; height:24px; border-radius:6px; border:1px solid var(--border)}
+
+    .help{font-size:12px; color:var(--muted)}
+    .warn{color:var(--warn)}
+    .ok{color:var(--ok)}
+    .error{color:var(--bad)}
+    .footerNote{font-size:12px; color:var(--muted); padding:0 18px 18px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏇 みんなで競馬 <span class="tag">ロビー & リアルタイム対戦</span></h1>
+    <div id="onlineBadge" class="badge">オフライン（デモ）</div>
+  </header>
+
+  <main>
+    <!-- 左：ロビー/設定 -->
+    <section class="card pad" id="left">
+      <h2>ロビー</h2>
+      <div class="col" id="lobbySection">
+        <div class="grid2">
+          <button id="createLobbyBtn">＋ ロビー作成</button>
+          <div class="row">
+            <input type="text" id="joinCode" placeholder="ロビーコードを入力" />
+            <button id="joinLobbyBtn" class="secondary">参加</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="pill">共有コード: <span id="lobbyCode" class="code">-</span> <span id="copyCode" class="copy">📋</span></div>
+          <div class="pill">あなた: <span id="whoami">未接続</span></div>
+          <div class="pill"><span id="hostBadge">参加者</span></div>
+        </div>
+
+        <div class="col" id="nameHorse">
+          <div class="grid2">
+            <div>
+              <label>プレイヤー名</label>
+              <input type="text" id="playerName" placeholder="例：ピカソ" />
+            </div>
+            <div>
+              <label>馬の名前</label>
+              <input type="text" id="horseName" placeholder="例：サンダー" />
+            </div>
+          </div>
+
+          <div class="grid3">
+            <div class="slider">
+              <div>最高速度</div>
+              <input type="range" id="sTop" min="6" max="24" step="0.1" value="14">
+              <div><span id="vTop">14.0</span> m/s</div>
+            </div>
+            <div class="slider">
+              <div>加速度</div>
+              <input type="range" id="sAcc" min="0.5" max="6" step="0.05" value="2.2">
+              <div><span id="vAcc">2.20</span> m/s²</div>
+            </div>
+            <div class="slider">
+              <div>スタミナ</div>
+              <input type="range" id="sSta" min="40" max="400" step="1" value="200">
+              <div><span id="vSta">200</span> SP</div>
+            </div>
+          </div>
+          <div class="grid3">
+            <div class="slider">
+              <div>運（ゆらぎ）</div>
+              <input type="range" id="sLuck" min="0" max="2" step="0.01" value="0.5">
+              <div><span id="vLuck">0.50</span></div>
+            </div>
+            <div class="slider">
+              <div>色</div>
+              <input type="color" id="horseColor" value="#7dd3fc" />
+              <div><span class="colorBox" id="colorBox"></span></div>
+            </div>
+            <div class="slider">
+              <div>距離</div>
+              <input type="range" id="trackLen" min="600" max="2200" step="50" value="1200">
+              <div><span id="vLen">1200</span> m</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="saveHorseBtn">設定を保存 / 更新</button>
+            <button id="startBtn" class="danger" disabled>ゲーム開始（ホストのみ）</button>
+          </div>
+
+          <div class="help">
+            <div>・ロビー作成者がホストです。参加者はコード入力で参加できます。</div>
+            <div>・馬の性能は自由に調整できます（範囲内）。ホストが開始するとレースが始まります。</div>
+          </div>
+        </div>
+
+        <div class="card pad" style="margin-top:10px">
+          <h2>参加者一覧</h2>
+          <div id="playersList" class="col"></div>
+        </div>
+
+        <div class="card pad" style="margin-top:10px">
+          <h2>オンライン有効化（必須）</h2>
+          <div class="help">異なるデバイス & Wi‑Fi から参加するには、下記の <b>Firebase 設定</b> を埋めてください。未設定の場合は同一端末のデモ表示のみになります。</div>
+          <details>
+            <summary>Firebase 設定を開く</summary>
+<pre class="code" id="cfgPreview"></pre>
+            <div class="help">1) Firebase プロジェクトを作成 → 2) Realtime Database を有効化（テストルール推奨）→ 3) 認証で「匿名」を有効 → 4) 下の <code>firebaseConfig</code> を埋めて保存。<br>共有相手は同じファイルを開くだけで参加できます（ロビーコードで同期）。</div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右：レース画面 -->
+    <section class="card pad" id="right">
+      <h2>レース</h2>
+      <div id="canvasWrap" class="card">
+        <canvas id="race"></canvas>
+        <div id="overlay"><div class="big" id="countDown"></div></div>
+        <div id="results" class="col" style="display:none"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="leaveBtn" class="secondary">ロビーから抜ける</button>
+        <button id="resetBtn" class="secondary">レースをリセット（ホスト）</button>
+      </div>
+      <div class="help" style="margin-top:8px">描画が重い場合はタブを１つだけ開いてください。レースはホスト端末で計算し、他端末へ配信します。</div>
+    </section>
+  </main>
+
+  <div class="footerNote">
+    ※ このHTMLは 1ファイルで動作します。Firebase の設定を埋めるとオンライン同期が有効になり、誰でもロビーコードで参加できます。
+  </div>
+
+  <!-- Firebase（任意・オンライン同期用） -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <script>
+  // ========= ユーザー設定：ここに Firebase 設定を貼り付け =========
+  const firebaseConfig = {
+    apiKey: "",
+    authDomain: "",
+    databaseURL: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: ""
+  };
+  // ============================================================
+
+  const el = (id)=>document.getElementById(id);
+  const uid = localStorage.getItem('uid') || (()=>{const v=crypto.getRandomValues(new Uint32Array(4)); const s=[...v].map(x=>x.toString(16).padStart(8,'0')).join(''); localStorage.setItem('uid', s); return s;})()
+  const state = {
+    net:false, app:null, db:null, me:{ id:uid, name:"", horse:null },
+    lobby:null, lobbyCode:null, isHost:false, players:{},
+    started:false, seed:null, results:[],
+    // レース描画
+    ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
+    lanes:[], lastTick:0, lastState:null, interp:{t:0, a:null, b:null},
+    trackLen:1200, // m
+  };
+
+  // UI 要素参照
+  const $ = {
+    code: el('lobbyCode'), who: el('whoami'), hostBadge: el('hostBadge'), onlineBadge: el('onlineBadge'),
+    create: el('createLobbyBtn'), joinBtn: el('joinLobbyBtn'), joinCode: el('joinCode'), copy: el('copyCode'),
+    pName: el('playerName'), hName: el('horseName'),
+    sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'),
+    vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'),
+    save: el('saveHorseBtn'), start: el('startBtn'), playersList: el('playersList'),
+    trackLen: el('trackLen'), vLen: el('vLen'),
+    canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
+    leave: el('leaveBtn'), reset: el('resetBtn'), cfgPreview: el('cfgPreview'),
+  };
+
+  // 値表示
+  function syncLabels(){
+    $.vTop.textContent = (+$.sTop.value).toFixed(1);
+    $.vAcc.textContent = (+$.sAcc.value).toFixed(2);
+    $.vSta.textContent = (+$.sSta.value).toFixed(0);
+    $.vLuck.textContent = (+$.sLuck.value).toFixed(2);
+    $.vLen.textContent = (+$.trackLen.value).toFixed(0);
+    $.colorBox.style.background = $.hColor.value;
+  }
+  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>i.addEventListener('input', syncLabels));
+  syncLabels();
+
+  // Firebase 初期化（設定が埋まっていればオンラインON）
+  function initFirebase(){
+    if(!firebaseConfig || !firebaseConfig.apiKey){
+      $.onlineBadge.textContent = 'オフライン（デモ）';
+      $.onlineBadge.style.background='linear-gradient(180deg, rgba(255,209,102,.2), rgba(255,209,102,.12))';
+      $.onlineBadge.style.border='1px solid rgba(255,209,102,.45)';
+      $.cfgPreview.textContent = 'const firebaseConfig = {\n  apiKey: "<APIキー>",\n  authDomain: "<xxx>.firebaseapp.com",\n  databaseURL: "https://<xxx>-default-rtdb.asia-southeast1.firebasedatabase.app",\n  projectId: "<プロジェクトID>",\n  storageBucket: "<xxx>.appspot.com",\n  messagingSenderId: "<数字>",\n  appId: "<appId>"\n};';
+      return;
+    }
+    state.app = firebase.initializeApp(firebaseConfig);
+    state.db = firebase.database();
+    state.net = true;
+    firebase.auth().signInAnonymously().catch(console.error);
+    $.onlineBadge.textContent = 'オンライン有効（Firebase）';
+    $.onlineBadge.style.background='linear-gradient(180deg, rgba(108,204,255,.25), rgba(108,204,255,.12))';
+    $.onlineBadge.style.border='1px solid rgba(108,204,255,.45)';
+  }
+  initFirebase();
+
+  // ユーティリティ
+  const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+  const randSeeded = (seed)=>{ let s = seed>>>0; return ()=>{ s = (s*1664525 + 1013904223)>>>0; return s/0x100000000; } };
+  const clamp=(n,min,max)=> Math.max(min, Math.min(max,n));
+  const prettyCode = c => c ? c.replace(/(.{3})/g,'$1 ').trim() : '-';
+
+  // ロビーコード
+  function makeCode(){
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s=''; for(let i=0;i<5;i++){ s += chars[Math.floor(Math.random()*chars.length)]; }
+    return s;
+  }
+
+  // DB 参照
+  const R = (path)=> state.db.ref(path);
+
+  // 参加者UI反映
+  function renderPlayers(){
+    $.playersList.innerHTML = '';
+    const keys = Object.keys(state.players||{});
+    if(keys.length===0){ $.playersList.innerHTML = '<div class="muted">（まだ参加者はいません）</div>'; return; }
+    keys.forEach(id=>{
+      const p = state.players[id];
+      if(!p) return;
+      const div = document.createElement('div');
+      div.className='row';
+      div.style.justifyContent='space-between';
+      div.innerHTML = `<div><b>${p.name||'名無し'}</b> <span class="muted">/ ${p.horse?.name||'馬'}</span></div>
+        <div class="row"><span class="badge" style="border-color:${p.horse?.color||'#888'}">${p.horse?.color||'#888'}</span>
+        <span class="muted">V${p.horse?.topSpeed||'?'} A${p.horse?.accel||'?'} S${p.horse?.stamina||'?'} L${p.horse?.luck||'?'} </span></div>`;
+      $.playersList.appendChild(div);
+    });
+  }
+
+  // ロビー作成
+  async function createLobby(){
+    const code = makeCode();
+    state.lobbyCode = code; state.isHost = true; updateHeader();
+    if(state.net){
+      const now = Date.now();
+      await R(`lobbies/${code}`).set({
+        createdAt: now,
+        hostId: uid,
+        started: false,
+        trackLen: +$.trackLen.value,
+        seed: 0
+      });
+      subscribeLobby(code);
+    }
+    $.code.textContent = prettyCode(code);
+    history.replaceState(null,'', location.pathname + `?room=${code}`);
+    $.start.disabled = false;
+  }
+
+  // ロビー参加
+  async function joinLobby(code){
+    state.lobbyCode = code; updateHeader();
+    if(state.net){
+      subscribeLobby(code);
+      await sleep(50);
+      await upsertMe();
+    }
+    $.code.textContent = prettyCode(code);
+    history.replaceState(null,'', location.pathname + `?room=${code}`);
+  }
+
+  // 自分の情報を保存
+  async function upsertMe(){
+    const name = $.pName.value.trim() || `Player-${uid.slice(0,4).toUpperCase()}`;
+    const horse = collectHorse();
+    state.me.name = name; state.me.horse = horse; $.who.textContent = name;
+    if(state.net && state.lobbyCode){
+      await R(`lobbies/${state.lobbyCode}/players/${uid}`).set({
+        name, horse, updatedAt: Date.now()
+      });
+    }
+  }
+
+  // ロビー購読
+  function subscribeLobby(code){
+    if(!state.net) return;
+    R(`lobbies/${code}`).on('value', snap=>{
+      const v = snap.val()||{}; state.lobby = v; state.started = !!v.started; state.seed = v.seed||0; state.trackLen = v.trackLen||1200;
+      $.trackLen.value = state.trackLen; syncLabels();
+      $.start.disabled = !state.isHost;
+    });
+    R(`lobbies/${code}/players`).on('value', snap=>{ state.players = snap.val()||{}; renderPlayers(); });
+    R(`lobbies/${code}/state`).on('value', snap=>{ state.lastState = snap.val()||null; });
+    R(`lobbies/${code}/results`).on('value', snap=>{ state.results = snap.val()||[]; renderResults(); });
+  }
+
+  // 退室
+  async function leaveLobby(){
+    if(state.net && state.lobbyCode){
+      await R(`lobbies/${state.lobbyCode}/players/${uid}`).remove();
+    }
+    state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[];
+    $.code.textContent='-'; $.who.textContent='未接続'; $.start.disabled=true; renderPlayers(); renderResults();
+    history.replaceState(null,'', location.pathname);
+  }
+
+  // ヘッダ更新
+  function updateHeader(){
+    el('hostBadge').textContent = state.isHost? 'ホスト' : '参加者';
+  }
+
+  // 馬パラメータ収集
+  function collectHorse(){
+    return {
+      name: $.hName.value.trim() || 'ノーマル',
+      color: $.hColor.value,
+      topSpeed: +(+$.sTop.value).toFixed(2),
+      accel: +(+$.sAcc.value).toFixed(2),
+      stamina: +(+$.sSta.value).toFixed(0),
+      luck: +(+$.sLuck.value).toFixed(2),
+    };
+  }
+
+  // === レースシミュ ===
+  const sim = {
+    horses:{}, order:[], finished:false, countdown:0,
+    reset(){ this.horses={}; this.order=[]; this.finished=false; this.countdown=3; $.results.style.display='none'; $.count.textContent=''; },
+    setupFromPlayers(){
+      const list = Object.entries(state.players||{});
+      const lanes = [];
+      list.forEach(([id,p],i)=>{
+        const h = p.horse||{};
+        this.horses[id] = {
+          id, name:p.name||id.slice(0,4), horse:h, x:0, v:0, s:h.stamina||200, done:false, tFinish:0
+        };
+        lanes.push({id, color:h.color||'#fff'});
+      });
+      state.lanes = lanes;
+    },
+    async start(){
+      this.reset();
+      this.setupFromPlayers();
+      state.started = true; state.seed = Math.floor(Math.random()*1e9);
+      if(state.net){
+        await R(`lobbies/${state.lobbyCode}`).update({ started:true, seed: state.seed, trackLen: +$.trackLen.value });
+      }
+      await this.countdownAnim();
+      if(state.isHost){ this.loopHost(); }
+    },
+    async countdownAnim(){
+      for(let i=3;i>0;i--){ $.count.textContent = i; await sleep(800); }
+      $.count.textContent = 'GO!'; await sleep(400); $.count.textContent='';
+    },
+    physics(dt, noise){
+      const L = state.trackLen;
+      for(const id in this.horses){
+        const H = this.horses[id]; if(H.done) continue;
+        const spec = H.horse;
+        const fatigue = clamp(1 - (H.s / Math.max(1, spec.stamina)), 0, 0.75); // 0~0.75 で最大25%低下
+        const accel = spec.accel * (1 - 0.5*fatigue) + (noise()-0.5)*spec.luck*0.6;
+        H.v = clamp(H.v + accel*dt, 0, spec.topSpeed*(1 - 0.4*fatigue));
+        H.x += H.v * dt;
+        H.s -= (0.015*H.v*H.v + 0.5*dt); // 速度二乗で消費 + 時間減衰
+        if(H.x>=L){ H.x=L; H.done=true; H.tFinish = performance.now(); this.order.push(id); }
+      }
+    },
+    async loopHost(){
+      const noise = randSeeded(state.seed);
+      const L = state.trackLen;
+      let last = performance.now();
+      const send = async ()=>{
+        if(state.net){
+          const snapshot = {}; const vs={};
+          Object.values(this.horses).forEach(H=>{ snapshot[H.id] = Math.round(H.x); vs[H.id]=Math.round(H.v*100)/100; });
+          await R(`lobbies/${state.lobbyCode}/state`).set({ t: Date.now(), L, pos: snapshot, vel: vs });
+        }
+      };
+      let acc = 0, sendAcc=0;
+      const step = (now)=>{
+        const dt = Math.min(0.05, (now-last)/1000); last=now; acc += dt; sendAcc+=dt;
+        this.physics(dt, noise);
+        if(sendAcc>0.10){ send(); sendAcc=0; }
+        drawRace();
+        if(this.order.length===Object.keys(this.horses).length){
+          this.finished=true; this.pushResults();
+          return;
+        }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    },
+    async pushResults(){
+      const out = this.order.map((id,idx)=>{
+        const p = state.players[id];
+        return { rank: idx+1, id, player: p?.name||id, horse: p?.horse?.name||'馬', color: p?.horse?.color||'#fff' };
+      });
+      $.results.style.display='block';
+      if(state.net){ await R(`lobbies/${state.lobbyCode}/results`).set(out); }
+      renderResults();
+    }
+  };
+
+  // 結果表示
+  function renderResults(){
+    const res = state.results||[];
+    if(!res.length){ $.results.style.display='none'; $.results.innerHTML=''; return; }
+    $.results.style.display='block';
+    $.results.innerHTML = '<b>結果</b>' + res.map(r=>`<div class="row" style="justify-content:space-between"><span>${r.rank}. <b>${r.player}</b> <span class="muted">/ ${r.horse}</span></span> <span class="badge" style="border-color:${r.color}">${r.color}</span></div>`).join('');
+  }
+
+  // キャンバス描画
+  function setupCanvas(){
+    const c = $.canvas; const wrap = el('canvasWrap');
+    const dpr = state.dpr; c.width = Math.floor(wrap.clientWidth * dpr); c.height = Math.floor(wrap.clientHeight * dpr);
+    state.ctx = c.getContext('2d'); state.canvas=c; drawRace(true);
+  }
+  window.addEventListener('resize', setupCanvas);
+
+  function drawRace(force=false){
+    const ctx = state.ctx; if(!ctx) return; const c = state.canvas; const dpr = state.dpr;
+    ctx.clearRect(0,0,c.width,c.height);
+    const lanes = state.lanes; const L = state.trackLen; if(!lanes.length){
+      ctx.fillStyle='rgba(255,255,255,.08)'; ctx.font=`${18*dpr}px system-ui`; ctx.fillText('ロビーに参加して馬を登録してください', 20*dpr, 40*dpr); return; }
+
+    const H = Math.max(60, Math.min(120, (c.height/lanes.length)-10));
+    const pad = 30*dpr; const left=120*dpr; const right=c.width-20*dpr; const w = right-left; 
+    // ゴール線
+    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=2*dpr;
+    ctx.setLineDash([8*dpr,8*dpr]);
+    ctx.beginPath(); ctx.moveTo(left+w, pad); ctx.lineTo(left+w, c.height-pad); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `${14*dpr}px ui-monospace, monospace`; ctx.fillStyle='rgba(255,255,255,.6)'; ctx.fillText(`${L} m`, left+w-40*dpr, pad-6*dpr);
+
+    lanes.forEach((ln, i)=>{
+      const y = pad + i*(H+8) + 10;
+      // レーン
+      ctx.fillStyle = 'rgba(255,255,255,.03)'; ctx.fillRect(left-10*dpr, y, w+20*dpr, H);
+      // 馬
+      const pos = getPos(ln.id);
+      const x = left + w * clamp(pos/L, 0, 1);
+      ctx.fillStyle = ln.color; ctx.beginPath(); ctx.roundRect(x-30*dpr, y+H*0.2, 60*dpr, H*0.6, 10*dpr); ctx.fill();
+      // 名前
+      ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font = `${16*dpr}px system-ui`; const p = state.players[ln.id];
+      const label = `${p?.name||'??'} / ${p?.horse?.name||'馬'}`;
+      ctx.fillText(label, 14*dpr, y + H*0.55);
+      // 距離
+      ctx.fillStyle='rgba(255,255,255,.6)'; ctx.font = `${12*dpr}px ui-monospace, monospace`;
+      ctx.fillText(`${Math.round(pos)}m`, x-18*dpr, y + H*0.95);
+    });
+  }
+
+  function getPos(id){
+    if(state.isHost){ return sim.horses[id]?.x || 0; }
+    // クライアントは配信された state を使用
+    const st = state.lastState; if(!st || !st.pos) return 0; const L = st.L||state.trackLen; const p = st.pos[id]||0; return p;
+  }
+
+  // レースリセット
+  async function resetRace(){
+    if(!state.isHost || !state.net || !state.lobbyCode) return;
+    await R(`lobbies/${state.lobbyCode}`).update({ started:false, seed:0 });
+    await R(`lobbies/${state.lobbyCode}/state`).remove();
+    await R(`lobbies/${state.lobbyCode}/results`).remove();
+    state.started=false; state.results=[]; state.lastState=null; sim.reset(); drawRace(true);
+  }
+
+  // 参加者／ホストUI制御
+  $.create.addEventListener('click', createLobby);
+  $.joinBtn.addEventListener('click', ()=>{
+    const code = $.joinCode.value.toUpperCase().replace(/\s|-/g,''); if(code.length<4){ alert('ロビーコードが短すぎます'); return; }
+    joinLobby(code);
+  });
+  $.copy.addEventListener('click', ()=>{
+    if(!state.lobbyCode) return; navigator.clipboard.writeText(state.lobbyCode); $.copy.textContent='✅'; setTimeout(()=>$.copy.textContent='📋', 1200);
+  });
+  $.save.addEventListener('click', upsertMe);
+  $.start.addEventListener('click', async ()=>{
+    if(!state.isHost){ return; }
+    await upsertMe();
+    sim.start();
+  });
+  $.leave.addEventListener('click', leaveLobby);
+  $.reset.addEventListener('click', resetRace);
+
+  // URLから参加
+  (function autoJoin(){
+    const q = new URLSearchParams(location.search); const room = (q.get('room')||'').toUpperCase();
+    if(room){ joinLobby(room); }
+  })();
+
+  // ローカルで編集中の名前/馬を復帰
+  (function restoreLocal(){
+    const pn = localStorage.getItem('playerName'); if(pn) $.pName.value = pn;
+    const hn = localStorage.getItem('horseName'); if(hn) $.hName.value = hn;
+  })();
+  $.pName.addEventListener('input', ()=>localStorage.setItem('playerName', $.pName.value));
+  $.hName.addEventListener('input', ()=>localStorage.setItem('horseName', $.hName.value));
+
+  // キャンバス初期化
+  setupCanvas(); drawRace(true);
+
+  // 非ホストの描画ループ（受信→描画）
+  (function loopClient(){
+    const step=()=>{ drawRace(); requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  })();
+
+  // 右クリックでチラ見設定表示
+  document.addEventListener('contextmenu', (e)=>{
+    e.preventDefault(); alert('ヒント: Firebase設定を埋めるとオンライン対戦が有効になります。\nこのダイアログは右クリックで表示されます。');
+  });
+
+  // 互換: CanvasのroundRectが無い環境
+  if(!CanvasRenderingContext2D.prototype.roundRect){
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r){ this.beginPath(); this.moveTo(x+r, y); this.lineTo(x+w-r, y); this.quadraticCurveTo(x+w, y, x+w, y+r); this.lineTo(x+w, y+h-r); this.quadraticCurveTo(x+w, y+h, x+w-r, y+h); this.lineTo(x+r, y+h); this.quadraticCurveTo(x, y+h, x, y+h-r); this.lineTo(x, y+r); this.quadraticCurveTo(x, y, x+r, y); this.closePath(); return this; };
+  }
+
+  </script>
+</body>
+</html>

@@ -70,15 +70,35 @@
     .copy{cursor:pointer}
     .badge{font-size:12px; padding:2px 8px; border-radius:999px; background:#0c1020; border:1px solid var(--border)}
 
-    /* キャンバスをレスポンシブ対応 */
-    #canvasWrap{height:520px; position:relative}
+    /* キャンバスをアスペクト比固定でレスポンシブ対応 */
+    #canvasWrap{
+      height:520px; 
+      position:relative;
+      overflow:hidden;
+    }
     @media (max-width:768px){
-      #canvasWrap{height:350px}
+      #canvasWrap{
+        height:300px;
+        /* アスペクト比16:9を維持 */
+        aspect-ratio: 16/9;
+        max-width:100%;
+        width:100%;
+      }
     }
     @media (max-width:480px){
-      #canvasWrap{height:280px}
+      #canvasWrap{
+        height:250px;
+        aspect-ratio: 16/9;
+      }
     }
-    canvas{width:100%; height:100%; background:repeating-linear-gradient(90deg, #111430, #111430 14px, #121535 14px, #121535 28px)}    
+    canvas{
+      width:100%; 
+      height:100%; 
+      background:repeating-linear-gradient(90deg, #111430, #111430 14px, #121535 14px, #121535 28px);
+      object-fit:contain;
+      max-width:100%;
+      max-height:100%;
+    }    
     #overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none}
     #overlay .big{font-size:72px; font-weight:700; text-shadow:0 10px 30px rgba(0,0,0,.4)}
     @media (max-width:768px){
@@ -453,12 +473,42 @@
     async finish(){ this.running=false; const out=this.order.map((id,idx)=>{ const p=state.players[id]; return { rank:idx+1, id, player:p&&p.name||id, horse:p&&p.horse&&p.horse.name||'馬', color:p&&p.horse&&p.horse.color||'#fff' }; }); if(state.net){ await R('lobbies/'+state.lobbyCode+'/results').set(out); await R('lobbies/'+state.lobbyCode).update({ started:false }); } state.results=out; renderResults(); state.started=false; updateButtonsState(); applyLockState(); }
   };
 
-  function setupCanvas(){ const c=$.canvas; const wrap=document.getElementById('canvasWrap'); const dpr=state.dpr; c.width=Math.floor(wrap.clientWidth*dpr); c.height=Math.floor(wrap.clientHeight*dpr); state.ctx=c.getContext('2d'); drawRace(true); }
+  function setupCanvas(){ 
+    const c=$.canvas; 
+    const wrap=document.getElementById('canvasWrap'); 
+    const dpr=state.dpr; 
+    
+    // アスペクト比を維持してキャンバスサイズを設定
+    const containerWidth = wrap.clientWidth;
+    const containerHeight = wrap.clientHeight;
+    
+    // 16:9のアスペクト比を基準に調整
+    const aspectRatio = 16/9;
+    let canvasWidth, canvasHeight;
+    
+    if(containerWidth / containerHeight > aspectRatio) {
+      // 高さ基準でサイズ決定
+      canvasHeight = containerHeight;
+      canvasWidth = canvasHeight * aspectRatio;
+    } else {
+      // 幅基準でサイズ決定
+      canvasWidth = containerWidth;
+      canvasHeight = canvasWidth / aspectRatio;
+    }
+    
+    c.width = Math.floor(canvasWidth * dpr); 
+    c.height = Math.floor(canvasHeight * dpr); 
+    c.style.width = canvasWidth + 'px';
+    c.style.height = canvasHeight + 'px';
+    
+    state.ctx = c.getContext('2d'); 
+    drawRace(true); 
+  }
   window.addEventListener('resize', setupCanvas);
 
   function getPos(id){ if(state.isHost){ return sim.horses[id]&&sim.horses[id].x||0; } const st=state.lastState; if(!st||!st.pos) return 0; return st.pos[id]||0; }
 
-  // 元のdrawRace関数をスマホ対応に調整
+  // 馬のアスペクト比を固定したdrawRace関数
   function drawRace(){ 
     const ctx=state.ctx; 
     if(!ctx) return; 
@@ -475,18 +525,21 @@
       return; 
     } 
     
-    // スマホ対応：画面サイズに応じた調整
-    const isSmall = c.width < 600*dpr;
-    const H = Math.max(40*dpr, Math.min(120*dpr, (c.height/lanes.length) - 10*dpr)); 
-    const pad = isSmall ? 20*dpr : 30*dpr; 
-    const left = isSmall ? 80*dpr : 120*dpr;
-    const right = c.width - (isSmall ? 15*dpr : 20*dpr);
+    // 固定比率でレイアウト計算
+    const canvasRealWidth = c.width / dpr;
+    const canvasRealHeight = c.height / dpr;
+    const isSmall = canvasRealWidth < 600;
+    
+    const H = Math.max(30*dpr, Math.min(80*dpr, (c.height/lanes.length) - 8*dpr)); 
+    const pad = isSmall ? 15*dpr : 25*dpr; 
+    const left = isSmall ? 60*dpr : 100*dpr;
+    const right = c.width - (isSmall ? 10*dpr : 15*dpr);
     const w = right - left; 
     
     // ゴールライン
     ctx.strokeStyle='rgba(255,255,255,.3)'; 
     ctx.lineWidth=2*dpr; 
-    ctx.setLineDash([8*dpr,8*dpr]); 
+    ctx.setLineDash([6*dpr,6*dpr]); 
     ctx.beginPath(); 
     ctx.moveTo(left+w,pad); 
     ctx.lineTo(left+w,c.height-pad); 
@@ -494,46 +547,44 @@
     ctx.setLineDash([]); 
     
     // 距離表示
-    ctx.font=`${(isSmall ? 11 : 14)*dpr}px ui-monospace, monospace`; 
+    ctx.font=`${(isSmall ? 10 : 12)*dpr}px ui-monospace, monospace`; 
     ctx.fillStyle='rgba(255,255,255,.6)'; 
-    ctx.fillText(`${L} m`, left+w-30*dpr, pad-6*dpr); 
+    ctx.fillText(`${L}m`, left+w-25*dpr, pad-4*dpr); 
     
     // 各レーン
     lanes.forEach((ln,i)=>{ 
-      const y = pad + i * (H + (isSmall ? 4 : 8)*dpr) + (isSmall ? 5 : 10)*dpr;
+      const y = pad + i * (H + 6*dpr) + 8*dpr;
       
       // レーン背景
       ctx.fillStyle='rgba(255,255,255,.03)'; 
-      ctx.fillRect(left-10*dpr, y, w+20*dpr, H); 
+      ctx.fillRect(left-8*dpr, y, w+16*dpr, H); 
       
       const pos = getPos(ln.id); 
-      const x = left + w * Math.max(0, Math.min(1, pos/L)); 
+      const progress = Math.max(0, Math.min(1, pos/L));
+      const x = left + w * progress; 
       const p = state.players[ln.id]; 
       const col = (state.lastState&&state.lastState.colors&&state.lastState.colors[ln.id])||(p&&p.horse&&p.horse.color)||ln.color||'#7dd3fc'; 
       
-      // 馬
-      const horseWidth = isSmall ? 24*dpr : 60*dpr;
-      const horseHeight = H * 0.6;
+      // 馬を正方形で描画（アスペクト比固定）
+      const horseSize = Math.min(H * 0.6, 24*dpr); // 正方形サイズ
       ctx.fillStyle = col; 
       if(ctx.roundRect){ 
-        ctx.roundRect(x - horseWidth/2, y + H*0.2, horseWidth, horseHeight, (isSmall ? 6 : 10)*dpr); 
+        ctx.roundRect(x - horseSize/2, y + (H - horseSize)/2, horseSize, horseSize, 4*dpr); 
         ctx.fill(); 
       } else { 
-        ctx.fillRect(x - horseWidth/2, y + H*0.2, horseWidth, horseHeight); 
+        ctx.fillRect(x - horseSize/2, y + (H - horseSize)/2, horseSize, horseSize); 
       } 
       
       // プレイヤー名
       ctx.fillStyle='rgba(255,255,255,.9)'; 
-      ctx.font=`${(isSmall ? 11 : 16)*dpr}px system-ui`; 
-      const label = isSmall ? 
-        `${(p&&p.name)||'??'}` : 
-        `${(p&&p.name)||'??'} / ${(p&&p.horse&&p.horse.name)||'馬'}`; 
-      ctx.fillText(label, (isSmall ? 4 : 14)*dpr, y + H*0.55); 
+      ctx.font=`${(isSmall ? 9 : 12)*dpr}px system-ui`; 
+      const name = (p&&p.name)||'??';
+      ctx.fillText(name, 4*dpr, y + H/2 + 3*dpr); 
       
       // 距離表示
       ctx.fillStyle='rgba(255,255,255,.6)'; 
-      ctx.font=`${(isSmall ? 9 : 12)*dpr}px ui-monospace, monospace`; 
-      ctx.fillText(`${Math.round(pos)}m`, x - (isSmall ? 12 : 18)*dpr, y + H*0.95); 
+      ctx.font=`${(isSmall ? 8 : 10)*dpr}px ui-monospace, monospace`; 
+      ctx.fillText(`${Math.round(pos)}m`, x + horseSize/2 + 4*dpr, y + H/2 + 3*dpr); 
     }); 
   }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>みんなで競馬 - ロビー&オンライン対戦</title>
+  <title>みんなで競馬 - ロビー&オンライン対戦（3周制）</title>
   <style>
     :root{
       --bg:#0f1221; --panel:#171a2e; --text:#e6e7ff; --muted:#9aa0c7; --accent:#6cf; --accent2:#9f6cff; --ok:#6cff80; --warn:#ffd166; --bad:#ff6c9f;
@@ -308,7 +308,7 @@
 </head>
 <body>
   <header>
-    <h1>🏇 みんなで競馬 <span class="tag">ロビー & リアルタイム対戦</span></h1>
+    <h1>🏇 みんなで競馬 <span class="tag">ロビー & リアルタイム対戦（3周制）</span></h1>
     <div id="onlineBadge" class="badge">オフライン（デモ）</div>
   </header>
 
@@ -388,6 +388,7 @@
               <div>・ロビー作成者がホストです。参加者は4桁コード入力で参加できます。</div>
               <div>・<b>レース中はステータスや色の変更はできません</b>（自動でロック）。</div>
               <div>・<b>誰かが途中で抜けたら試合は放棄</b>（全員に通知）。</div>
+              <div>・<b>3周制レース</b>：スタート/ゴール地点を3回通過したらゴール！</div>
             </div>
           </div>
 
@@ -406,7 +407,7 @@
 
     <!-- 右：レース画面 -->
     <section class="card pad" id="right">
-      <h2>レース</h2>
+      <h2>レース（3周制）</h2>
       <div id="canvasWrap" class="card">
         <canvas id="race"></canvas>
         <div id="overlay"><div class="big" id="countDown"></div></div>
@@ -424,7 +425,7 @@
         <button id="resetBtn" class="secondary">レースをリセット（ホスト）</button>
         <button id="abortBtn" class="danger" style="display:none">試合を中断（ホスト）</button>
       </div>
-      <div class="help" style="margin-top:8px">レースはホスト端末で計算し、他端末へ配信します。</div>
+      <div class="help" style="margin-top:8px">レースはホスト端末で計算し、他端末へ配信します。3周したらゴール！</div>
     </section>
   </main>
 
@@ -456,7 +457,8 @@
     lobby:null, lobbyCode:null, isHost:false, players:{},
     started:false, seed:null, results:[],
     ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
-    lanes:[], lastState:null, trackLen:1200,
+    lanes:[], lastState:null, trackLen:400, // 1周の距離（3周で1200m）
+    totalLaps:3, // 総周回数
     racePlayerIds:[],
     abandoned:null,
     emptyLobbyTimeout:null, // 空ロビー削除用タイマー
@@ -767,7 +769,8 @@
         hostId:uid, 
         started:false, 
         abandoned:null, 
-        trackLen: 1200, // 固定値
+        trackLen: state.trackLen,
+        totalLaps: state.totalLaps,
         seed:0 
       }); 
       subscribeLobby(code); 
@@ -841,9 +844,9 @@
       state.lobby=v; 
       state.started=!!v.started; 
       state.seed=v.seed||0; 
-      state.trackLen=v.trackLen||1200; 
+      state.trackLen=v.trackLen||400; 
+      state.totalLaps=v.totalLaps||3;
       state.abandoned=v.abandoned||null;
-      if($.trackLen) $.trackLen.value=state.trackLen; 
       syncLabels(); 
       applyLockState(); 
       updateButtonsState();
@@ -966,7 +969,25 @@
       $.results.style.display='none'; 
       $.count.textContent=''; 
     },
-    setupFromPlayers(){ const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ const h=p.horse||{}; this.horses[id]={ id, name:p.name||id.slice(0,4), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id, color:h.color||'#fff'}); }); state.lanes=lanes; },
+    setupFromPlayers(){ 
+      const lanes=[]; 
+      Object.entries(state.players||{}).forEach(([id,p])=>{ 
+        const h=p.horse||{}; 
+        this.horses[id]={ 
+          id, 
+          name:p.name||id.slice(0,4), 
+          horse:h, 
+          x:0, 
+          v:0, 
+          s:h.stamina||200, 
+          done:false,
+          laps:0, // 現在の周回数
+          totalDistance:0 // 総走行距離
+        }; 
+        lanes.push({id, color:h.color||'#fff'}); 
+      }); 
+      state.lanes=lanes; 
+    },
     async start(){ 
       this.reset(); 
       this.setupFromPlayers(); 
@@ -975,7 +996,6 @@
       
       if(state.isHost){ 
         state.seed=Math.floor(Math.random()*1e9); 
-        state.trackLen = 1200; // 固定値
         state.racePlayerIds=Object.keys(state.players||{}); 
         
         if(state.net){ 
@@ -983,7 +1003,8 @@
             started:true, 
             abandoned:null, 
             seed:state.seed, 
-            trackLen:state.trackLen 
+            trackLen:state.trackLen,
+            totalLaps:state.totalLaps
           }); 
         } 
       }
@@ -1005,7 +1026,9 @@
       }
     },
     physics(dt,noise){ 
-      const L=state.trackLen; 
+      const L=state.trackLen;
+      const totalLaps=state.totalLaps;
+      
       for(const id in this.horses){ 
         const H=this.horses[id]; 
         if(H.done) continue; 
@@ -1019,19 +1042,29 @@
         
         const accel=adjustedAccel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; 
         H.v=clamp(H.v+accel*dt,0,adjustedTopSpeed*(1-0.4*fatigue)); 
+        
+        const oldX = H.x;
         H.x+=H.v*dt; 
+        H.totalDistance += H.v*dt;
         H.s-=(0.015*H.v*H.v+0.5*dt); 
-        if(H.x>=L){ 
-          H.x=L; 
-          H.done=true; 
-          this.order.push(id);
-        } 
+        
+        // 1周判定
+        if(oldX < L && H.x >= L) {
+          H.laps++;
+          H.x = H.x - L; // 超過分を次の周に持ち越し
+          
+          // ゴール判定（3周完了）
+          if(H.laps >= totalLaps) {
+            H.x = 0; // ゴール地点に固定
+            H.done = true;
+            this.order.push(id);
+          }
+        }
       } 
     },
     loopHost(){ 
       this.running=true; 
       const noise=randSeeded(state.seed); 
-      const L=state.trackLen; 
       let last=performance.now(), sendAcc=0; 
       const step=(now)=>{ 
         if(!this.running||!state.started||state.abandoned){ 
@@ -1042,17 +1075,19 @@
         this.physics(dt,noise); 
         sendAcc+=dt; 
         if(sendAcc>0.10 && state.net){ 
-          const pos={}, vel={}; 
+          const pos={}, vel={}, laps={}, totalDist={}; 
           Object.values(this.horses).forEach(H=>{
             pos[H.id]=Math.round(H.x); 
             vel[H.id]=Math.round(H.v*100)/100;
+            laps[H.id]=H.laps;
+            totalDist[H.id]=Math.round(H.totalDistance);
           }); 
           const colors={}; 
           Object.values(this.horses).forEach(H=>{ 
             const p=state.players[H.id]; 
             colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; 
           }); 
-          R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L, pos, vel, colors }); 
+          R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L:state.trackLen, totalLaps:state.totalLaps, pos, vel, laps, totalDist, colors }); 
           sendAcc=0; 
         } 
         if(state.ctx) drawRace(); 
@@ -1113,7 +1148,16 @@
     return st.pos[id] || 0; 
   }
 
-  // 縦向き楕円コースでのレース描画
+  function getLaps(id){
+    if(state.isHost){
+      return sim.horses[id] && sim.horses[id].laps || 0;
+    }
+    const st = state.lastState;
+    if(!st || !st.laps) return 0;
+    return st.laps[id] || 0;
+  }
+
+  // 縦向き楕円コースでのレース描画（3周制対応）
   function drawRace(){ 
     const ctx=state.ctx; 
     if(!ctx) return; 
@@ -1122,6 +1166,7 @@
     ctx.clearRect(0,0,c.width,c.height); 
     const lanes=state.lanes; 
     const L=state.trackLen; 
+    const totalLaps=state.totalLaps;
     
     // 画面サイズ判定を最初に行う
     const isSmall = c.width < 400*dpr;
@@ -1160,42 +1205,26 @@
       }
     }
     
-    // スタートライン（上部）- より目立つように
-    ctx.strokeStyle = 'rgba(108,255,128,.9)';
-    ctx.lineWidth = 5*dpr;
+    // スタート/ゴールライン（上部）- より目立つように
+    ctx.strokeStyle = 'rgba(255,204,108,.9)';
+    ctx.lineWidth = 6*dpr;
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(centerX - radiusX + laneSpacing, centerY - radiusY);
     ctx.lineTo(centerX + radiusX - laneSpacing, centerY - radiusY);
     ctx.stroke();
     
-    // ゴールライン（下部）- より目立つように
-    ctx.strokeStyle = 'rgba(255,204,108,.9)';
-    ctx.lineWidth = 5*dpr;
-    ctx.setLineDash([8*dpr, 8*dpr]);
-    ctx.beginPath();
-    ctx.moveTo(centerX - radiusX + laneSpacing, centerY + radiusY);
-    ctx.lineTo(centerX + radiusX - laneSpacing, centerY + radiusY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    
-    // スタート表示
-    ctx.fillStyle = 'rgba(108,255,128,.9)';
-    ctx.font = `bold ${16*dpr}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.fillText('🏁 START', centerX, centerY - radiusY - 20*dpr);
-    
-    // ゴール表示
+    // スタート/ゴール表示
     ctx.fillStyle = 'rgba(255,204,108,.9)';
     ctx.font = `bold ${16*dpr}px system-ui`;
     ctx.textAlign = 'center';
-    ctx.fillText('🏆 GOAL', centerX, centerY + radiusY + 35*dpr);
+    ctx.fillText('🏁 START / GOAL', centerX, centerY - radiusY - 20*dpr);
     
-    // 距離表示
+    // 距離と周回数表示
     ctx.fillStyle = 'rgba(255,255,255,.8)';
     ctx.font = `${14*dpr}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(`${L}m`, centerX, centerY - radiusY - 45*dpr);
+    ctx.fillText(`${totalLaps}周制 (1周 ${L}m)`, centerX, centerY - radiusY - 45*dpr);
     
     // 各馬の描画
     lanes.forEach((ln, i) => {
@@ -1205,10 +1234,11 @@
       if(laneRadiusX <= 0 || laneRadiusY <= 0) return;
       
       const pos = getPos(ln.id);
+      const laps = getLaps(ln.id);
       const progress = Math.max(0, Math.min(1, pos / L));
       
       // 楕円上の位置計算（上部から時計回り）
-      const angle = -Math.PI/2 + progress * 2 * Math.PI; // 上部(START)からスタート
+      const angle = -Math.PI/2 + progress * 2 * Math.PI; // 上部(START/GOAL)からスタート
       const x = centerX + laneRadiusX * Math.cos(angle);
       const y = centerY + laneRadiusY * Math.sin(angle);
       
@@ -1235,21 +1265,22 @@
         ctx.fillText(p.horse.mood.emoji, x, y - horseSize/2 - 8*dpr);
       }
       
-      // プレイヤー名を馬の近くに表示
+      // プレイヤー名と周回数を馬の近くに表示
       if(p?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
         const fontSize = isSmall ? 10*dpr : 12*dpr;
         ctx.font = `${fontSize}px system-ui`;
         ctx.textAlign = 'center';
-        const nameWidth = ctx.measureText(p.name).width;
+        const nameText = `${p.name} (${laps}/${totalLaps})`;
+        const nameWidth = ctx.measureText(nameText).width;
         
         // 名前の背景
         ctx.fillStyle = 'rgba(0,0,0,.8)';
         ctx.fillRect(x - nameWidth/2 - 3*dpr, y + horseSize/2 + 2*dpr, nameWidth + 6*dpr, fontSize + 4*dpr);
         
-        // 名前のテキスト
-        ctx.fillStyle = 'rgba(255,255,255,.9)';
-        ctx.fillText(p.name, x, y + horseSize/2 + fontSize + 4*dpr);
+        // 名前のテキスト（周回数付き）
+        ctx.fillStyle = laps >= totalLaps ? 'rgba(255,215,0,.9)' : 'rgba(255,255,255,.9)'; // ゴール時は金色
+        ctx.fillText(nameText, x, y + horseSize/2 + fontSize + 4*dpr);
       }
       
       // 距離表示（小さく）
@@ -1265,19 +1296,20 @@
     // レジェンド（スマホでは省略）
     if(!isSmall) {
       ctx.fillStyle = 'rgba(0,0,0,.4)';
-      ctx.fillRect(10*dpr, 10*dpr, 140*dpr, lanes.length * 18*dpr + 25*dpr);
+      ctx.fillRect(10*dpr, 10*dpr, 160*dpr, lanes.length * 18*dpr + 25*dpr);
       
       lanes.forEach((ln, i) => {
         const p = state.players[ln.id];
         const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';
+        const laps = getLaps(ln.id);
         
         ctx.fillStyle = col;
         ctx.fillRect(15*dpr, 25*dpr + i * 18*dpr, 14*dpr, 14*dpr);
         
-        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        ctx.fillStyle = laps >= totalLaps ? 'rgba(255,215,0,.9)' : 'rgba(255,255,255,.9)'; // ゴール時は金色
         ctx.font = `${11*dpr}px system-ui`;
         ctx.textAlign = 'left';
-        const nameText = (p?.name || '??');
+        const nameText = `${p?.name || '??'} (${laps}/${totalLaps})`;
         ctx.fillText(nameText, 35*dpr, 35*dpr + i * 18*dpr);
         
         // 気分表示
@@ -1316,9 +1348,9 @@
     joinLobby(code); 
   });
   $.copy.addEventListener('click', ()=>{ if(!state.lobbyCode) return; navigator.clipboard.writeText(state.lobbyCode); $.copy.textContent='✅'; setTimeout(()=>$.copy.textContent='📋', 1200); });
-  $.save.addEventListener('click', upsertMe);
+  $.save.addEventListener('click', () => upsertMe(false)); // 気分を変更しない
   $.ready.addEventListener('click', ()=> setReady(!state.me.ready));
-  $.start.addEventListener('click', async ()=>{ if(!state.isHost) return; if(!everyoneReady()){ alert('全員の準備がまだ完了していません'); return; } if(!(state.players[uid]&&state.players[uid].ready)){ alert('ホストも「準備OK」を押してください'); return; } await upsertMe(); sim.start(); });
+  $.start.addEventListener('click', async ()=>{ if(!state.isHost) return; if(!everyoneReady()){ alert('全員の準備がまだ完了していません'); return; } if(!(state.players[uid]&&state.players[uid].ready)){ alert('ホストも「準備OK」を押してください'); return; } await upsertMe(false); sim.start(); }); // 気分を変更しない
   
   // 通常のコントロールボタン
   $.leave.addEventListener('click', leaveLobby);

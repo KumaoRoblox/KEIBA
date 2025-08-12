@@ -26,7 +26,7 @@
     main.racing {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr;
-      height: calc(100vh - 60px);
+      height: calc(100vh - 50px);
       padding: 0;
       gap: 0;
     }
@@ -37,45 +37,58 @@
       height: 100%;
       border-radius: 0;
       margin: 0;
+      padding: 0;
     }
     main.racing #canvasWrap {
-      height: 100%;
+      height: calc(100vh - 80px);
       border-radius: 0;
+      position: relative;
     }
     
-    /* レース中のコントロールパネル */
+    /* レース中のコントロールパネル - 下部に配置 */
     #raceControls {
       position: absolute;
-      top: 10px;
-      right: 10px;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
       background: rgba(0,0,0,0.8);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 8px;
       display: none;
-      flex-direction: column;
-      gap: 6px;
+      flex-direction: row;
+      gap: 8px;
       z-index: 100;
+      backdrop-filter: blur(10px);
     }
     #raceControls.show {
       display: flex;
     }
     #raceControls button {
-      padding: 6px 12px;
+      padding: 8px 12px;
       font-size: 12px;
-      min-width: 120px;
+      min-width: 90px;
+      white-space: nowrap;
     }
     
     @media (max-width: 768px) {
+      main.racing {
+        height: 100vh;
+      }
+      main.racing #canvasWrap {
+        height: calc(100vh - 60px);
+      }
       #raceControls {
-        top: 5px;
-        right: 5px;
+        bottom: 5px;
         padding: 6px;
+        gap: 4px;
+        flex-direction: column;
+        min-width: 140px;
       }
       #raceControls button {
-        padding: 5px 8px;
+        padding: 6px 8px;
         font-size: 11px;
-        min-width: 100px;
+        min-width: 130px;
       }
     }
     @media (max-width:1024px){ 
@@ -172,16 +185,16 @@
     }
     @media (max-width:768px){
       #canvasWrap{
-        height:200px;
-        aspect-ratio: 2/1;
+        height:300px;
+        aspect-ratio: 4/3;
         max-width:100%;
         width:100%;
       }
     }
     @media (max-width:480px){
       #canvasWrap{
-        height:180px;
-        aspect-ratio: 2/1;
+        height:250px;
+        aspect-ratio: 4/3;
       }
     }
     canvas{
@@ -493,6 +506,9 @@
       if(raceControls) raceControls.classList.add('show');
       if(normalControls) normalControls.style.display = 'none';
       
+      // キャンバスサイズを再調整
+      setTimeout(() => setupCanvas(), 100);
+      
       // レース中コントロールボタンの設定
       const leave2 = document.getElementById('leaveBtn2');
       const reset2 = document.getElementById('resetBtn2');
@@ -506,6 +522,9 @@
       main.classList.remove('racing');
       if(raceControls) raceControls.classList.remove('show');
       if(normalControls) normalControls.style.display = 'flex';
+      
+      // キャンバスサイズを再調整
+      setTimeout(() => setupCanvas(), 100);
     }
   }
 
@@ -679,11 +698,19 @@
     const wrap=document.getElementById('canvasWrap'); 
     const dpr=state.dpr; 
     
-    // 楕円トラック用に2:1のアスペクト比を維持
+    // レース中は縦長、通常時は横長のアスペクト比
     const containerWidth = wrap.clientWidth;
     const containerHeight = wrap.clientHeight;
     
-    const aspectRatio = 2/1; // 楕円に適した比率
+    let aspectRatio;
+    if(document.querySelector('main').classList.contains('racing')) {
+      // レース中は縦長 (3:4)
+      aspectRatio = 3/4;
+    } else {
+      // 通常時は横長 (4:3) 
+      aspectRatio = 4/3;
+    }
+    
     let canvasWidth, canvasHeight;
     
     if(containerWidth / containerHeight > aspectRatio) {

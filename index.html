@@ -749,6 +749,7 @@
       ctx.stroke();
       
       // プレイヤー名をコース内側に表示（スマホでも表示するよう修正）
+      const isSmall = c.width < 400*dpr;
       if(p?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
         const fontSize = isSmall ? 8*dpr : 9*dpr;

@@ -346,26 +346,29 @@
 
           <div class="col" id="horseAdjustments">
             <h3 style="margin:8px 0 4px 0; font-size:14px">馬の能力調整</h3>
+            <div id="statsPoints" style="text-align:center; font-size:16px; font-weight:bold; color:var(--accent); margin-bottom:8px">
+              残りポイント: <span id="remainingPoints">100</span> / 100
+            </div>
             <div class="adjustments-container">
               <div class="slider">
                 <div>最高速度</div>
-                <input type="range" id="sTop" min="1" max="50" step="0.1" value="14">
-                <div><span id="vTop">14.0</span> m/s</div>
+                <input type="range" id="sTop" min="0" max="100" step="1" value="25">
+                <div><span id="vTop">25</span> pt</div>
               </div>
               <div class="slider">
                 <div>加速度</div>
-                <input type="range" id="sAcc" min="0.1" max="10" step="0.01" value="2.2">
-                <div><span id="vAcc">2.20</span> m/s²</div>
+                <input type="range" id="sAcc" min="0" max="100" step="1" value="25">
+                <div><span id="vAcc">25</span> pt</div>
               </div>
               <div class="slider">
                 <div>スタミナ</div>
-                <input type="range" id="sSta" min="10" max="5000" step="1" value="200">
-                <div><span id="vSta">200</span> SP</div>
+                <input type="range" id="sSta" min="0" max="100" step="1" value="25">
+                <div><span id="vSta">25</span> pt</div>
               </div>
               <div class="slider">
                 <div>運（ゆらぎ）</div>
-                <input type="range" id="sLuck" min="0" max="3" step="0.01" value="0.5">
-                <div><span id="vLuck">0.50</span></div>
+                <input type="range" id="sLuck" min="0" max="100" step="1" value="25">
+                <div><span id="vLuck">25</span> pt</div>
               </div>
               <div class="slider">
                 <div>馬の色</div>
@@ -473,17 +476,66 @@
     trackLen: el('trackLen'), trackRow: el('trackRow'), vLen: el('vLen'),
     canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
     leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn'), cfgPreview: el('cfgPreview'),
+    remainingPoints: el('remainingPoints')
   };
 
   function syncLabels(){
-    $.vTop.textContent=(+$.sTop.value).toFixed(1);
-    $.vAcc.textContent=(+$.sAcc.value).toFixed(2);
-    $.vSta.textContent=(+$.sSta.value).toFixed(0);
-    $.vLuck.textContent=(+$.sLuck.value).toFixed(2);
-    if($.trackLen) $.vLen.textContent=(+$.trackLen.value).toFixed(0);
-    $.colorBox.style.background=$.hColor.value;
+    $.vTop.textContent = (+$.sTop.value).toFixed(0);
+    $.vAcc.textContent = (+$.sAcc.value).toFixed(0);
+    $.vSta.textContent = (+$.sSta.value).toFixed(0);
+    $.vLuck.textContent = (+$.sLuck.value).toFixed(0);
+    if($.trackLen) $.vLen.textContent = (+$.trackLen.value).toFixed(0);
+    $.colorBox.style.background = $.hColor.value;
+    
+    // 残りポイントを計算
+    const totalUsed = (+$.sTop.value) + (+$.sAcc.value) + (+$.sSta.value) + (+$.sLuck.value);
+    const remaining = 100 - totalUsed;
+    
+    if($.remainingPoints) {
+      $.remainingPoints.textContent = remaining;
+      $.remainingPoints.style.color = remaining < 0 ? 'var(--bad)' : remaining === 0 ? 'var(--ok)' : 'var(--accent)';
+    }
+    
+    // ポイントオーバーの場合は保存ボタンを無効化
+    if($.save) {
+      $.save.disabled = remaining < 0 || state.started;
+      $.save.style.opacity = remaining < 0 ? '0.5' : '1';
+    }
   }
-  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>{ if(i) i.addEventListener('input', ()=>{ syncLabels(); if(state.me.ready) setReady(false); }); });
+  
+  // スライダーの値変更を制御する関数
+  function updateSliderValues() {
+    const totalUsed = (+$.sTop.value) + (+$.sAcc.value) + (+$.sSta.value) + (+$.sLuck.value);
+    const remaining = 100 - totalUsed;
+    
+    // 各スライダーの最大値を動的に調整
+    [$.sTop, $.sAcc, $.sSta, $.sLuck].forEach(slider => {
+      if(slider) {
+        const currentValue = +slider.value;
+        const newMax = currentValue + Math.max(0, remaining);
+        slider.max = Math.min(100, newMax);
+      }
+    });
+    
+    syncLabels();
+  }
+  
+  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>{ 
+    if(i) {
+      if(i === $.hColor || i === $.trackLen) {
+        i.addEventListener('input', ()=>{ 
+          syncLabels(); 
+          if(state.me.ready) setReady(false); 
+        });
+      } else {
+        i.addEventListener('input', ()=>{ 
+          updateSliderValues(); 
+          if(state.me.ready) setReady(false); 
+        });
+      }
+    }
+  });
+  
   syncLabels();
 
   function initFirebase(){
@@ -602,9 +654,16 @@
       const p=state.players[id]; if(!p) return;
       const div=document.createElement('div'); div.className='row'; div.style.justifyContent='space-between';
       const status=p.ready?'<span class="badge" style="border-color:#6cff80">READY</span>':'<span class="badge" style="border-color:#ffd166">待機</span>';
+      const moodInfo = p.horse?.mood ? `<span class="badge" style="border-color:${p.horse.mood.color}">${p.horse.mood.emoji} ${p.horse.mood.name}</span>` : '';
+      
+      // ポイント表示
+      const pointsInfo = p.horse?.points ? 
+        `S${p.horse.points.speed} A${p.horse.points.accel} T${p.horse.points.stamina} L${p.horse.points.luck}` :
+        `V${p.horse&&p.horse.topSpeed||'?'} A${p.horse&&p.horse.accel||'?'} S${p.horse&&p.horse.stamina||'?'} L${p.horse&&p.horse.luck||'?'}`;
+      
       div.innerHTML=`<div><b>${p.name||'名無し'}</b> <span class="muted">/ ${p.horse&&p.horse.name||'馬'}</span></div>
-        <div class="row">${status} <span class="badge" style="border-color:${p.horse&&p.horse.color||'#888'}">${p.horse&&p.horse.color||'#888'}</span>
-        <span class="muted">V${p.horse&&p.horse.topSpeed||'?'} A${p.horse&&p.horse.accel||'?'} S${p.horse&&p.horse.stamina||'?'} L${p.horse&&p.horse.luck||'?'} </span></div>`;
+        <div class="row">${status} ${moodInfo} <span class="badge" style="border-color:${p.horse&&p.horse.color||'#888'}">${p.horse&&p.horse.color||'#888'}</span>
+        <span class="muted">${pointsInfo}</span></div>`;
       $.playersList.appendChild(div);
     });
   }
@@ -620,7 +679,40 @@
   function updateStartVisibility(){ const show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
   function updateReadyButton(){ $.ready.textContent=state.me.ready? '準備解除':'準備OK'; $.ready.className=state.me.ready? 'secondary':'success'; }
 
-  function collectHorse(){ return { name: $.hName.value.trim()||'ノーマル', color: $.hColor.value, topSpeed:+(+$.sTop.value).toFixed(2), accel:+(+$.sAcc.value).toFixed(2), stamina:+(+$.sSta.value).toFixed(0), luck:+(+$.sLuck.value).toFixed(2) }; }
+  function collectHorse(){ 
+    // 馬の気分をランダムで決定
+    const moods = [
+      { name: '絶好調', emoji: '😤', multiplier: 1.2, color: '#ff6b6b' },
+      { name: '好調', emoji: '😊', multiplier: 1.1, color: '#4ecdc4' },
+      { name: '普通', emoji: '😐', multiplier: 1.0, color: '#95a5a6' },
+      { name: '不調', emoji: '😔', multiplier: 0.9, color: '#f39c12' },
+      { name: '絶不調', emoji: '😩', multiplier: 0.8, color: '#9b59b6' }
+    ];
+    const randomMood = moods[Math.floor(Math.random() * moods.length)];
+    
+    // ポイントを実際の能力値に変換
+    const topSpeedBase = 5 + (+$.sTop.value) * 0.3; // 5-35 m/s
+    const accelBase = 0.5 + (+$.sAcc.value) * 0.08; // 0.5-8.5 m/s²
+    const staminaBase = 50 + (+$.sSta.value) * 45; // 50-4550
+    const luckBase = (+$.sLuck.value) * 0.03; // 0-3.0
+    
+    return { 
+      name: $.hName.value.trim()||'ノーマル', 
+      color: $.hColor.value, 
+      topSpeed: +(topSpeedBase).toFixed(2), 
+      accel: +(accelBase).toFixed(2), 
+      stamina: +(staminaBase).toFixed(0), 
+      luck: +(luckBase).toFixed(2),
+      mood: randomMood,
+      // ポイント値も保存
+      points: {
+        speed: +$.sTop.value,
+        accel: +$.sAcc.value,
+        stamina: +$.sSta.value,
+        luck: +$.sLuck.value
+      }
+    }; 
+  }
 
   function ensurePresence(){
     if(!state.net || !state.lobbyCode) return;
@@ -833,7 +925,30 @@
       for(let i=3;i>0;i--){ $.count.textContent=String(i); await sleep(800);} $.count.textContent='GO!'; await sleep(400); $.count.textContent='';
       if(state.isHost){ this.loopHost(); }
     },
-    physics(dt,noise){ const L=state.trackLen; for(const id in this.horses){ const H=this.horses[id]; if(H.done) continue; const spec=H.horse; const fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); const accel=spec.accel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; H.v=clamp(H.v+accel*dt,0,spec.topSpeed*(1-0.4*fatigue)); H.x+=H.v*dt; H.s-=(0.015*H.v*H.v+0.5*dt); if(H.x>=L){ H.x=L; H.done=true; this.order.push(id);} } },
+    physics(dt,noise){ 
+      const L=state.trackLen; 
+      for(const id in this.horses){ 
+        const H=this.horses[id]; 
+        if(H.done) continue; 
+        const spec=H.horse; 
+        const fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); 
+        
+        // 気分による能力補正
+        const moodMultiplier = spec.mood ? spec.mood.multiplier : 1.0;
+        const adjustedTopSpeed = spec.topSpeed * moodMultiplier;
+        const adjustedAccel = spec.accel * moodMultiplier;
+        
+        const accel=adjustedAccel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; 
+        H.v=clamp(H.v+accel*dt,0,adjustedTopSpeed*(1-0.4*fatigue)); 
+        H.x+=H.v*dt; 
+        H.s-=(0.015*H.v*H.v+0.5*dt); 
+        if(H.x>=L){ 
+          H.x=L; 
+          H.done=true; 
+          this.order.push(id);
+        } 
+      } 
+    },
     loopHost(){ 
       this.running=true; 
       const noise=randSeeded(state.seed); 
@@ -919,7 +1034,7 @@
     return st.pos[id] || 0; 
   }
 
-  // 楕円コースでのレース描画
+  // 縦向き楕円コースでのレース描画
   function drawRace(){ 
     const ctx=state.ctx; 
     if(!ctx) return; 
@@ -941,16 +1056,16 @@
       return; 
     } 
     
-    // 楕円コースの設定
+    // 縦向き楕円コースの設定
     const centerX = c.width / 2;
     const centerY = c.height / 2;
-    const trackWidth = Math.min(c.width * 0.8, c.height * 0.8);
-    const trackHeight = trackWidth * 0.6; // 楕円の縦横比を調整
+    const trackHeight = Math.min(c.height * 0.8, c.width * 1.4); // 縦長
+    const trackWidth = trackHeight * 0.6; // 楕円の縦横比を調整（縦長）
     const radiusX = trackWidth / 2;
     const radiusY = trackHeight / 2;
     
     const laneCount = lanes.length;
-    const laneSpacing = Math.min(15*dpr, radiusY * 0.15);
+    const laneSpacing = Math.min(12*dpr, radiusX * 0.15);
     
     // コースの外枠と内枠を描画
     for(let i = 0; i <= laneCount; i++) {
@@ -958,33 +1073,50 @@
       const currentRadiusY = radiusY - i * laneSpacing;
       
       if(currentRadiusX > 0 && currentRadiusY > 0) {
-        ctx.strokeStyle = i === 0 ? 'rgba(108,255,128,.4)' : 'rgba(255,255,255,.15)';
-        ctx.lineWidth = i === 0 ? 3*dpr : 1*dpr;
+        ctx.strokeStyle = i === 0 ? 'rgba(108,255,128,.6)' : 'rgba(255,255,255,.15)';
+        ctx.lineWidth = i === 0 ? 4*dpr : 1*dpr;
         ctx.beginPath();
         ctx.ellipse(centerX, centerY, currentRadiusX, currentRadiusY, 0, 0, 2 * Math.PI);
         ctx.stroke();
       }
     }
     
-    // スタート/ゴールライン（右側）
-    ctx.strokeStyle = 'rgba(255,255,255,.8)';
-    ctx.lineWidth = 3*dpr;
+    // スタートライン（上部）- より目立つように
+    ctx.strokeStyle = 'rgba(108,255,128,.9)';
+    ctx.lineWidth = 5*dpr;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(centerX - radiusX + laneSpacing, centerY - radiusY);
+    ctx.lineTo(centerX + radiusX - laneSpacing, centerY - radiusY);
+    ctx.stroke();
+    
+    // ゴールライン（下部）- より目立つように
+    ctx.strokeStyle = 'rgba(255,204,108,.9)';
+    ctx.lineWidth = 5*dpr;
     ctx.setLineDash([8*dpr, 8*dpr]);
     ctx.beginPath();
-    ctx.moveTo(centerX + radiusX, centerY - radiusY);
-    ctx.lineTo(centerX + radiusX - laneCount * laneSpacing, centerY - radiusY + laneCount * laneSpacing);
+    ctx.moveTo(centerX - radiusX + laneSpacing, centerY + radiusY);
+    ctx.lineTo(centerX + radiusX - laneSpacing, centerY + radiusY);
     ctx.stroke();
     ctx.setLineDash([]);
     
-    // スタート/ゴール表示
-    ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.font = `${14*dpr}px system-ui`;
-    ctx.fillText('START/GOAL', centerX + radiusX - 60*dpr, centerY - radiusY - 12*dpr);
+    // スタート表示
+    ctx.fillStyle = 'rgba(108,255,128,.9)';
+    ctx.font = `bold ${16*dpr}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🏁 START', centerX, centerY - radiusY - 20*dpr);
+    
+    // ゴール表示
+    ctx.fillStyle = 'rgba(255,204,108,.9)';
+    ctx.font = `bold ${16*dpr}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🏆 GOAL', centerX, centerY + radiusY + 35*dpr);
     
     // 距離表示
     ctx.fillStyle = 'rgba(255,255,255,.8)';
-    ctx.font = `${12*dpr}px ui-monospace, monospace`;
-    ctx.fillText(`${L}m`, centerX + radiusX - 30*dpr, centerY - radiusY - 30*dpr);
+    ctx.font = `${14*dpr}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${L}m`, centerX, centerY - radiusY - 45*dpr);
     
     // 各馬の描画
     lanes.forEach((ln, i) => {
@@ -996,8 +1128,8 @@
       const pos = getPos(ln.id);
       const progress = Math.max(0, Math.min(1, pos / L));
       
-      // 楕円上の位置計算（右側から時計回り）
-      const angle = -Math.PI/2 + progress * 2 * Math.PI; // 右側(0度)からスタート
+      // 楕円上の位置計算（上部から時計回り）
+      const angle = -Math.PI/2 + progress * 2 * Math.PI; // 上部(START)からスタート
       const x = centerX + laneRadiusX * Math.cos(angle);
       const y = centerY + laneRadiusY * Math.sin(angle);
       
@@ -1005,7 +1137,7 @@
       const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';
       
       // 馬を円形で描画
-      const horseSize = Math.min(12*dpr, laneSpacing * 0.8);
+      const horseSize = Math.min(14*dpr, laneSpacing * 0.9);
       ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(x, y, horseSize/2, 0, 2 * Math.PI);
@@ -1013,52 +1145,71 @@
       
       // 馬の輪郭
       ctx.strokeStyle = 'rgba(255,255,255,.8)';
-      ctx.lineWidth = 1*dpr;
+      ctx.lineWidth = 2*dpr;
       ctx.stroke();
+      
+      // 気分エモジを馬の上に表示
+      if(p?.horse?.mood) {
+        ctx.font = `${horseSize*0.8}px system-ui`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        ctx.fillText(p.horse.mood.emoji, x, y - horseSize/2 - 8*dpr);
+      }
       
       // プレイヤー名を馬の近くに表示
       if(p?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
         const fontSize = isSmall ? 10*dpr : 12*dpr;
         ctx.font = `${fontSize}px system-ui`;
+        ctx.textAlign = 'center';
         const nameWidth = ctx.measureText(p.name).width;
         
         // 名前の背景
-        ctx.fillStyle = 'rgba(0,0,0,.7)';
-        ctx.fillRect(x - nameWidth/2 - 3*dpr, y - horseSize/2 - fontSize - 4*dpr, nameWidth + 6*dpr, fontSize + 4*dpr);
+        ctx.fillStyle = 'rgba(0,0,0,.8)';
+        ctx.fillRect(x - nameWidth/2 - 3*dpr, y + horseSize/2 + 2*dpr, nameWidth + 6*dpr, fontSize + 4*dpr);
         
         // 名前のテキスト
         ctx.fillStyle = 'rgba(255,255,255,.9)';
-        ctx.fillText(p.name, x - nameWidth/2, y - horseSize/2 - 2*dpr);
+        ctx.fillText(p.name, x, y + horseSize/2 + fontSize + 4*dpr);
       }
       
       // 距離表示（小さく）
       if(!isSmall) {
         ctx.fillStyle = 'rgba(255,255,255,.6)';
-        ctx.font = `${8*dpr}px ui-monospace, monospace`;
+        ctx.font = `${9*dpr}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
         const distText = `${Math.round(pos)}m`;
-        const distWidth = ctx.measureText(distText).width;
-        ctx.fillText(distText, x - distWidth/2, y + horseSize/2 + 12*dpr);
+        ctx.fillText(distText, x, y + horseSize/2 + 25*dpr);
       }
     });
     
     // レジェンド（スマホでは省略）
     if(!isSmall) {
-      ctx.fillStyle = 'rgba(0,0,0,.3)';
-      ctx.fillRect(10*dpr, 10*dpr, 120*dpr, lanes.length * 16*dpr + 20*dpr);
+      ctx.fillStyle = 'rgba(0,0,0,.4)';
+      ctx.fillRect(10*dpr, 10*dpr, 140*dpr, lanes.length * 18*dpr + 25*dpr);
       
       lanes.forEach((ln, i) => {
         const p = state.players[ln.id];
         const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';
         
         ctx.fillStyle = col;
-        ctx.fillRect(15*dpr, 20*dpr + i * 16*dpr, 12*dpr, 12*dpr);
+        ctx.fillRect(15*dpr, 25*dpr + i * 18*dpr, 14*dpr, 14*dpr);
         
         ctx.fillStyle = 'rgba(255,255,255,.9)';
-        ctx.font = `${10*dpr}px system-ui`;
-        ctx.fillText((p?.name || '??'), 32*dpr, 30*dpr + i * 16*dpr);
+        ctx.font = `${11*dpr}px system-ui`;
+        ctx.textAlign = 'left';
+        const nameText = (p?.name || '??');
+        ctx.fillText(nameText, 35*dpr, 35*dpr + i * 18*dpr);
+        
+        // 気分表示
+        if(p?.horse?.mood) {
+          ctx.fillText(p.horse.mood.emoji, 35*dpr + ctx.measureText(nameText).width + 5*dpr, 35*dpr + i * 18*dpr);
+        }
       });
     }
+    
+    // textAlignをリセット
+    ctx.textAlign = 'left';
   }
 
   // --- Buttons ---

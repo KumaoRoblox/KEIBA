@@ -374,11 +374,11 @@
   async function createLobby(){
     const code=makeCode(); state.lobbyCode=code; state.isHost=true; updateHeader();
     if(state.net){ await R('lobbies/'+code).set({ createdAt:Date.now(), hostId:uid, started:false, abandoned:null, trackLen:+($.trackLen?$.trackLen.value:1200), seed:0 }); subscribeLobby(code); }
-    $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`);
+    $.code.textContent=code; history.replaceState(null,'', location.pathname+'?room='+code);
     await upsertMe(); ensurePresence(); updateRoleUI();
   }
 
-  async function joinLobby(code){ state.lobbyCode=code; state.isHost=false; updateHeader(); if(state.net){ subscribeLobby(code); ensurePresence(); await sleep(50); await upsertMe(); } $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`); updateRoleUI(); }
+  async function joinLobby(code){ state.lobbyCode=code; state.isHost=false; updateHeader(); if(state.net){ subscribeLobby(code); ensurePresence(); await sleep(50); await upsertMe(); } $.code.textContent=code; history.replaceState(null,'', location.pathname+'?room='+code); updateRoleUI(); }
 
   async function abandonRace(reason){ if(!state.net || !state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:{ at:Date.now(), reason } }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); }
 

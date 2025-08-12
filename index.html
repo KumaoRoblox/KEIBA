@@ -587,9 +587,15 @@
       await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null });
       await R('lobbies/'+state.lobbyCode+'/state').remove();
     }
-    state.started=false; state.abandoned=null; state.results=[]; state.lastState=null;
-    sim.reset(); drawRace();
-    applyLockState(); updateButtonsState(); updateStartVisibility();
+    state.started=false; 
+    state.abandoned=null; 
+    state.results=[]; 
+    state.lastState=null;
+    sim.reset(); 
+    if(state.ctx) drawRace();
+    applyLockState(); 
+    updateButtonsState(); 
+    updateStartVisibility();
   }
 
   function subscribeLobby(code){ if(!state.net) return;
@@ -615,7 +621,13 @@
 
   const sim = {
     running:false, horses:{}, order:[],
-    reset(){ this.horses={}; this.order=[]; this.running=false; $.results.style.display='none'; $.count.textContent=''; },
+    reset(){ 
+      this.horses={}; 
+      this.order=[]; 
+      this.running=false; 
+      $.results.style.display='none'; 
+      $.count.textContent=''; 
+    },
     setupFromPlayers(){ const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ const h=p.horse||{}; this.horses[id]={ id, name:p.name||id.slice(0,4), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id, color:h.color||'#fff'}); }); state.lanes=lanes; },
     async start(){ this.reset(); this.setupFromPlayers(); state.started=true; state.abandoned=null; if(state.isHost){ state.seed=Math.floor(Math.random()*1e9); state.trackLen=+($.trackLen?$.trackLen.value:1200); state.racePlayerIds=Object.keys(state.players||{}); if(state.net){ await R('lobbies/'+state.lobbyCode).update({ started:true, abandoned:null, seed:state.seed, trackLen:state.trackLen }); } }
       updateButtonsState(); applyLockState();
@@ -623,7 +635,42 @@
       if(state.isHost){ this.loopHost(); }
     },
     physics(dt,noise){ const L=state.trackLen; for(const id in this.horses){ const H=this.horses[id]; if(H.done) continue; const spec=H.horse; const fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); const accel=spec.accel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; H.v=clamp(H.v+accel*dt,0,spec.topSpeed*(1-0.4*fatigue)); H.x+=H.v*dt; H.s-=(0.015*H.v*H.v+0.5*dt); if(H.x>=L){ H.x=L; H.done=true; this.order.push(id);} } },
-    loopHost(){ this.running=true; const noise=randSeeded(state.seed); const L=state.trackLen; let last=performance.now(), sendAcc=0; const step=(now)=>{ if(!this.running||!state.started||state.abandoned){ return; } const dt=Math.min(0.05,(now-last)/1000); last=now; this.physics(dt,noise); sendAcc+=dt; if(sendAcc>0.10 && state.net){ const pos={}, vel={}; Object.values(this.horses).forEach(H=>{pos[H.id]=Math.round(H.x); vel[H.id]=Math.round(H.v*100)/100;}); const colors={}; Object.values(this.horses).forEach(H=>{ const p=state.players[H.id]; colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; }); R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L, pos, vel, colors }); sendAcc=0; } drawRace(); if(this.order.length===Object.keys(this.horses).length){ this.finish(); return; } requestAnimationFrame(step); }; requestAnimationFrame(step); },
+    loopHost(){ 
+      this.running=true; 
+      const noise=randSeeded(state.seed); 
+      const L=state.trackLen; 
+      let last=performance.now(), sendAcc=0; 
+      const step=(now)=>{ 
+        if(!this.running||!state.started||state.abandoned){ 
+          return; 
+        } 
+        const dt=Math.min(0.05,(now-last)/1000); 
+        last=now; 
+        this.physics(dt,noise); 
+        sendAcc+=dt; 
+        if(sendAcc>0.10 && state.net){ 
+          const pos={}, vel={}; 
+          Object.values(this.horses).forEach(H=>{
+            pos[H.id]=Math.round(H.x); 
+            vel[H.id]=Math.round(H.v*100)/100;
+          }); 
+          const colors={}; 
+          Object.values(this.horses).forEach(H=>{ 
+            const p=state.players[H.id]; 
+            colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; 
+          }); 
+          R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L, pos, vel, colors }); 
+          sendAcc=0; 
+        } 
+        if(state.ctx) drawRace(); 
+        if(this.order.length===Object.keys(this.horses).length){ 
+          this.finish(); 
+          return; 
+        } 
+        requestAnimationFrame(step); 
+      }; 
+      requestAnimationFrame(step); 
+    },
     async finish(){ this.running=false; const out=this.order.map((id,idx)=>{ const p=state.players[id]; return { rank:idx+1, id, player:p&&p.name||id, horse:p&&p.horse&&p.horse.name||'馬', color:p&&p.horse&&p.horse.color||'#fff' }; }); if(state.net){ await R('lobbies/'+state.lobbyCode+'/results').set(out); await R('lobbies/'+state.lobbyCode).update({ started:false }); } state.results=out; renderResults(); state.started=false; updateButtonsState(); applyLockState(); }
   };
 
@@ -653,11 +700,18 @@
     c.style.height = canvasHeight + 'px';
     
     state.ctx = c.getContext('2d'); 
-    drawRace(true); 
+    if(state.ctx) drawRace(); 
   }
   window.addEventListener('resize', setupCanvas);
 
-  function getPos(id){ if(state.isHost){ return sim.horses[id]&&sim.horses[id].x||0; } const st=state.lastState; if(!st||!st.pos) return 0; return st.pos[id]||0; }
+  function getPos(id){ 
+    if(state.isHost){ 
+      return sim.horses[id] && sim.horses[id].x || 0; 
+    } 
+    const st = state.lastState; 
+    if(!st || !st.pos) return 0; 
+    return st.pos[id] || 0; 
+  }
 
   // 楕円コースでのレース描画
   function drawRace(){ 
@@ -833,7 +887,21 @@
   
   // 通常のコントロールボタン
   $.leave.addEventListener('click', leaveLobby);
-  $.reset.addEventListener('click', async ()=>{ if(!state.isHost||!state.net||!state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtonsState(); applyLockState(); updateStartVisibility(); });
+  $.reset.addEventListener('click', async ()=>{ 
+    if(!state.isHost||!state.net||!state.lobbyCode) return; 
+    await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); 
+    await R('lobbies/'+state.lobbyCode+'/state').remove(); 
+    await R('lobbies/'+state.lobbyCode+'/results').remove(); 
+    state.started=false; 
+    state.results=[]; 
+    state.lastState=null; 
+    state.abandoned=null; 
+    sim.reset(); 
+    if(state.ctx) drawRace(); 
+    updateButtonsState(); 
+    applyLockState(); 
+    updateStartVisibility(); 
+  });
   $.abort.addEventListener('click', async ()=>{ await abortToLobby(); });
 
   // レース中のコントロールボタン
@@ -842,7 +910,21 @@
   const abort2 = document.getElementById('abortBtn2');
   
   if(leave2) leave2.addEventListener('click', leaveLobby);
-  if(reset2) reset2.addEventListener('click', async ()=>{ if(!state.isHost||!state.net||!state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtonsState(); applyLockState(); updateStartVisibility(); });
+  if(reset2) reset2.addEventListener('click', async ()=>{ 
+    if(!state.isHost||!state.net||!state.lobbyCode) return; 
+    await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); 
+    await R('lobbies/'+state.lobbyCode+'/state').remove(); 
+    await R('lobbies/'+state.lobbyCode+'/results').remove(); 
+    state.started=false; 
+    state.results=[]; 
+    state.lastState=null; 
+    state.abandoned=null; 
+    sim.reset(); 
+    if(state.ctx) drawRace(); 
+    updateButtonsState(); 
+    applyLockState(); 
+    updateStartVisibility(); 
+  });
   if(abort2) abort2.addEventListener('click', async ()=>{ await abortToLobby(); });
 
   // URLから自動参加
@@ -853,8 +935,16 @@
   $.pName.addEventListener('input', ()=>localStorage.setItem('playerName',$.pName.value));
   $.hName.addEventListener('input', ()=>localStorage.setItem('horseName',$.hName.value));
 
-  // キャンバス
-  setupCanvas(); (function loopClient(){ const step=()=>{ drawRace(); requestAnimationFrame(step); }; requestAnimationFrame(step); })();
+  // キャンバス初期化とクライアントループ
+  setupCanvas(); 
+  
+  function clientLoop(){ 
+    if(state.ctx) {
+      drawRace(); 
+    }
+    requestAnimationFrame(clientLoop); 
+  }
+  clientLoop();
 
   document.addEventListener('contextmenu', (e)=>{ e.preventDefault(); alert('ヒント: Firebase設定を埋めるとオンライン対戦が有効になります。'); });
 

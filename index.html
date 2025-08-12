@@ -259,7 +259,15 @@
         gap:6px;
       }
     }
-    input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:10px; background:transparent; cursor:pointer}
+    input[type=range]{
+      width:100%; 
+      -webkit-appearance:none; 
+      appearance:none; 
+      height:12px; 
+      background:transparent; 
+      cursor:pointer;
+      touch-action: none; /* タッチスクロールを無効化 */
+    }
     input[type=range]::-webkit-slider-runnable-track{
       height:12px; 
       background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); 
@@ -375,12 +383,6 @@
                 <input type="color" id="horseColor" value="#7dd3fc" />
                 <div><span class="colorBox" id="colorBox" style="display:inline-block; width:20px; height:20px; border-radius:4px; border:1px solid var(--border)"></span></div>
               </div>
-              <!-- 距離はホストのみ表示 -->
-              <div class="slider" id="trackRow" style="display:none">
-                <div>レース距離</div>
-                <input type="range" id="trackLen" min="200" max="5000" step="10" value="1200">
-                <div><span id="vLen">1200</span> m</div>
-              </div>
             </div>
 
             <div class="row">
@@ -473,7 +475,6 @@
     sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'),
     vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'),
     save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'),
-    trackLen: el('trackLen'), trackRow: el('trackRow'), vLen: el('vLen'),
     canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
     leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn'), cfgPreview: el('cfgPreview'),
     remainingPoints: el('remainingPoints')
@@ -484,7 +485,6 @@
     $.vAcc.textContent = (+$.sAcc.value).toFixed(0);
     $.vSta.textContent = (+$.sSta.value).toFixed(0);
     $.vLuck.textContent = (+$.sLuck.value).toFixed(0);
-    if($.trackLen) $.vLen.textContent = (+$.trackLen.value).toFixed(0);
     $.colorBox.style.background = $.hColor.value;
     
     // 残りポイントを計算
@@ -496,43 +496,31 @@
       $.remainingPoints.style.color = remaining < 0 ? 'var(--bad)' : remaining === 0 ? 'var(--ok)' : 'var(--accent)';
     }
     
-    // ポイントオーバーの場合は保存ボタンを無効化
+    // ポイントオーバーまたは未使用の場合は保存ボタンを無効化
     if($.save) {
-      $.save.disabled = remaining < 0 || state.started;
-      $.save.style.opacity = remaining < 0 ? '0.5' : '1';
+      $.save.disabled = remaining !== 0 || state.started;
+      $.save.style.opacity = remaining !== 0 ? '0.5' : '1';
     }
   }
   
-  // スライダーの値変更を制御する関数
-  function updateSliderValues() {
-    const totalUsed = (+$.sTop.value) + (+$.sAcc.value) + (+$.sSta.value) + (+$.sLuck.value);
-    const remaining = 100 - totalUsed;
-    
-    // 各スライダーの最大値を動的に調整
-    [$.sTop, $.sAcc, $.sSta, $.sLuck].forEach(slider => {
-      if(slider) {
-        const currentValue = +slider.value;
-        const newMax = currentValue + Math.max(0, remaining);
-        slider.max = Math.min(100, newMax);
-      }
-    });
-    
-    syncLabels();
-  }
-  
-  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>{ 
-    if(i) {
-      if(i === $.hColor || i === $.trackLen) {
-        i.addEventListener('input', ()=>{ 
-          syncLabels(); 
-          if(state.me.ready) setReady(false); 
-        });
-      } else {
-        i.addEventListener('input', ()=>{ 
-          updateSliderValues(); 
-          if(state.me.ready) setReady(false); 
-        });
-      }
+  // イベントリスナーを個別に設定
+  [$.sTop, $.sAcc, $.sSta, $.sLuck, $.hColor].forEach(slider => {
+    if(slider) {
+      slider.addEventListener('input', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        syncLabels();
+        if(state.me.ready) setReady(false);
+      });
+      
+      // タッチイベントも処理
+      slider.addEventListener('touchmove', (e) => {
+        e.stopPropagation();
+      });
+      
+      slider.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      });
     }
   });
   
@@ -593,7 +581,6 @@
       if(detailedSetup) detailedSetup.style.display = 'none';
     }
     
-    if($.trackRow) $.trackRow.style.display = host ? '' : 'none';
     if($.ready) $.ready.style.display = joined ? '' : 'none';
     applyLockState();
     updateButtonsState();
@@ -603,7 +590,6 @@
   function applyLockState(){
     const trackEditable = state.isHost && !state.started;
     [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.save].forEach(e=>{ if(e) e.disabled = !!state.started; });
-    if($.trackLen){ $.trackLen.disabled = !trackEditable; }
   }
 
   function updateButtonsState(){
@@ -675,7 +661,25 @@
     $.results.innerHTML='<b>結果</b>'+ res.map(r=>`<div class="row" style="justify-content:space-between"><span>${r.rank}. <b>${r.player}</b> <span class="muted">/ ${r.horse}</span></span> <span class="badge" style="border-color:${r.color}">${r.color}</span></div>`).join('');
   }
 
-  function everyoneReady(){ const ps=state.players||{}; const ids=Object.keys(ps); if(!ids.length) return false; return ids.every(id=>ps[id]&&ps[id].ready); }
+  function everyoneReady(){ 
+    const ps = state.players || {}; 
+    const ids = Object.keys(ps); 
+    if(!ids.length) return false; 
+    
+    // 全員が準備完了かつ、全員のステータス振りが完了しているかチェック
+    return ids.every(id => {
+      const player = ps[id];
+      if(!player || !player.ready) return false;
+      
+      // ステータスポイントチェック
+      if(player.horse && player.horse.points) {
+        const totalPoints = player.horse.points.speed + player.horse.points.accel + 
+                           player.horse.points.stamina + player.horse.points.luck;
+        return totalPoints === 100;
+      }
+      return true; // 古い形式の場合はそのまま通す
+    });
+  }
   function updateStartVisibility(){ const show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
   function updateReadyButton(){ $.ready.textContent=state.me.ready? '準備解除':'準備OK'; $.ready.className=state.me.ready? 'secondary':'success'; }
 
@@ -748,10 +752,28 @@
   async function setReady(val){ state.me.ready=!!val; updateReadyButton(); if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ ready:state.me.ready, updatedAt:Date.now() }); } renderPlayers(); updateStartVisibility(); }
 
   async function createLobby(){
-    const code=makeCode(); state.lobbyCode=code; state.isHost=true; updateHeader();
-    if(state.net){ await R('lobbies/'+code).set({ createdAt:Date.now(), hostId:uid, started:false, abandoned:null, trackLen:+($.trackLen?$.trackLen.value:1200), seed:0 }); subscribeLobby(code); }
-    $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`);
-    await upsertMe(); ensurePresence(); updateRoleUI();
+    const code=makeCode(); 
+    state.lobbyCode=code; 
+    state.isHost=true; 
+    updateHeader();
+    
+    if(state.net){ 
+      await R('lobbies/'+code).set({ 
+        createdAt:Date.now(), 
+        hostId:uid, 
+        started:false, 
+        abandoned:null, 
+        trackLen: 1200, // 固定値
+        seed:0 
+      }); 
+      subscribeLobby(code); 
+    }
+    
+    $.code.textContent=code; 
+    history.replaceState(null,'', location.pathname+`?room=${code}`);
+    await upsertMe(); 
+    ensurePresence(); 
+    updateRoleUI();
   }
 
   async function joinLobby(code){ state.lobbyCode=code; state.isHost=false; updateHeader(); if(state.net){ subscribeLobby(code); ensurePresence(); await sleep(50); await upsertMe(); } $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`); updateRoleUI(); }
@@ -845,7 +867,7 @@
     });
   }
 
-  // ロビー自動削除機能
+  // ロビー自動削除機能（修正版）
   function checkAndCleanupLobby(code, players) {
     if(!state.net || !code) return;
     
@@ -854,16 +876,20 @@
     if(playerCount === 0) {
       // 誰もいない場合、20秒後に削除予約
       if(!state.emptyLobbyTimeout) {
+        console.log(`Lobby ${code} is empty, scheduling deletion in 20 seconds`);
         state.emptyLobbyTimeout = setTimeout(async () => {
           try {
             // 20秒後に再度チェック
-            const currentPlayers = await R('lobbies/'+code+'/players').once('value');
-            const currentPlayerCount = Object.keys(currentPlayers.val() || {}).length;
+            const snapshot = await R('lobbies/'+code+'/players').once('value');
+            const currentPlayers = snapshot.val() || {};
+            const currentPlayerCount = Object.keys(currentPlayers).length;
             
             if(currentPlayerCount === 0) {
               // まだ誰もいなければロビーを削除
               await R('lobbies/'+code).remove();
               console.log(`Empty lobby ${code} has been automatically deleted`);
+            } else {
+              console.log(`Lobby ${code} has players again, deletion cancelled`);
             }
           } catch(e) {
             console.warn('Failed to cleanup empty lobby:', e);
@@ -874,6 +900,7 @@
     } else {
       // 誰かがいる場合、削除予約をキャンセル
       if(state.emptyLobbyTimeout) {
+        console.log(`Lobby ${code} has players, deletion cancelled`);
         clearTimeout(state.emptyLobbyTimeout);
         state.emptyLobbyTimeout = null;
       }
@@ -920,10 +947,42 @@
       $.count.textContent=''; 
     },
     setupFromPlayers(){ const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ const h=p.horse||{}; this.horses[id]={ id, name:p.name||id.slice(0,4), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id, color:h.color||'#fff'}); }); state.lanes=lanes; },
-    async start(){ this.reset(); this.setupFromPlayers(); state.started=true; state.abandoned=null; if(state.isHost){ state.seed=Math.floor(Math.random()*1e9); state.trackLen=+($.trackLen?$.trackLen.value:1200); state.racePlayerIds=Object.keys(state.players||{}); if(state.net){ await R('lobbies/'+state.lobbyCode).update({ started:true, abandoned:null, seed:state.seed, trackLen:state.trackLen }); } }
-      updateButtonsState(); applyLockState();
-      for(let i=3;i>0;i--){ $.count.textContent=String(i); await sleep(800);} $.count.textContent='GO!'; await sleep(400); $.count.textContent='';
-      if(state.isHost){ this.loopHost(); }
+    async start(){ 
+      this.reset(); 
+      this.setupFromPlayers(); 
+      state.started=true; 
+      state.abandoned=null; 
+      
+      if(state.isHost){ 
+        state.seed=Math.floor(Math.random()*1e9); 
+        state.trackLen = 1200; // 固定値
+        state.racePlayerIds=Object.keys(state.players||{}); 
+        
+        if(state.net){ 
+          await R('lobbies/'+state.lobbyCode).update({ 
+            started:true, 
+            abandoned:null, 
+            seed:state.seed, 
+            trackLen:state.trackLen 
+          }); 
+        } 
+      }
+      
+      updateButtonsState(); 
+      applyLockState();
+      
+      for(let i=3;i>0;i--){ 
+        $.count.textContent=String(i); 
+        await sleep(800);
+      } 
+      
+      $.count.textContent='GO!'; 
+      await sleep(400); 
+      $.count.textContent='';
+      
+      if(state.isHost){ 
+        this.loopHost(); 
+      }
     },
     physics(dt,noise){ 
       const L=state.trackLen; 

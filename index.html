@@ -44,7 +44,9 @@
     button:hover{filter:brightness(1.05)}
     button:active{transform:translateY(1px)}
     button.secondary{background:transparent; border:1px solid var(--border);}
-    .danger{background:linear-gradient(180deg, rgba(255,108,159,.2), rgba(255,108,159,.12)); border:1px solid rgba(255,108,159,.45)}
+    $1
+
+    .success{background:linear-gradient(180deg, rgba(108,255,128,.2), rgba(108,255,128,.12)); border:1px solid rgba(108,255,128,.45)}
 
     .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
     .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
@@ -109,24 +111,24 @@
           <div class="grid3">
             <div class="slider">
               <div>最高速度</div>
-              <input type="range" id="sTop" min="6" max="24" step="0.1" value="14">
+              <input type=\"range\" id=\"sTop\" min=\"1\" max=\"50\" step=\"0.1\" value=\"14\">
               <div><span id="vTop">14.0</span> m/s</div>
             </div>
             <div class="slider">
               <div>加速度</div>
-              <input type="range" id="sAcc" min="0.5" max="6" step="0.05" value="2.2">
+              <input type=\"range\" id=\"sAcc\" min=\"0.1\" max=\"10\" step=\"0.01\" value=\"2.2\">
               <div><span id="vAcc">2.20</span> m/s²</div>
             </div>
             <div class="slider">
               <div>スタミナ</div>
-              <input type="range" id="sSta" min="40" max="400" step="1" value="200">
+              <input type=\"range\" id=\"sSta\" min=\"10\" max=\"5000\" step=\"1\" value=\"200\">
               <div><span id="vSta">200</span> SP</div>
             </div>
           </div>
           <div class="grid3">
             <div class="slider">
               <div>運（ゆらぎ）</div>
-              <input type="range" id="sLuck" min="0" max="2" step="0.01" value="0.5">
+              <input type=\"range\" id=\"sLuck\" min=\"0\" max=\"3\" step=\"0.01\" value=\"0.5\">
               <div><span id="vLuck">0.50</span></div>
             </div>
             <div class="slider">
@@ -136,14 +138,15 @@
             </div>
             <div class="slider">
               <div>距離</div>
-              <input type="range" id="trackLen" min="600" max="2200" step="50" value="1200">
+              <input type=\"range\" id=\"trackLen\" min=\"200\" max=\"5000\" step=\"10\" value=\"1200\">
               <div><span id="vLen">1200</span> m</div>
             </div>
           </div>
 
-          <div class="row">
-            <button id="saveHorseBtn">設定を保存 / 更新</button>
-            <button id="startBtn" class="danger" disabled>ゲーム開始（ホストのみ）</button>
+          <div class=\"row\">
+            <button id=\"saveHorseBtn\">設定を保存 / 更新</button>
+            <button id=\"readyBtn\" class=\"success\">準備OK</button>
+            <button id=\"startBtn\" class=\"danger\" style=\"display:none\">ゲーム開始（ホストのみ）</button>
           </div>
 
           <div class="help">
@@ -227,7 +230,7 @@
     pName: el('playerName'), hName: el('horseName'),
     sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'),
     vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'),
-    save: el('saveHorseBtn'), start: el('startBtn'), playersList: el('playersList'),
+    save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'),
     trackLen: el('trackLen'), vLen: el('vLen'),
     canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
     leave: el('leaveBtn'), reset: el('resetBtn'), cfgPreview: el('cfgPreview'),
@@ -242,7 +245,7 @@
     $.vLen.textContent = (+$.trackLen.value).toFixed(0);
     $.colorBox.style.background = $.hColor.value;
   }
-  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>i.addEventListener('input', syncLabels));
+  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>i.addEventListener('input', ()=>{ syncLabels(); if(state.me.ready) setReady(false); }));
   syncLabels();
 
   // Firebase 初期化（設定が埋まっていればオンラインON）
@@ -295,6 +298,7 @@
         <div class="row"><span class="badge" style="border-color:${p.horse?.color||'#888'}">${p.horse?.color||'#888'}</span>
         <span class="muted">V${p.horse?.topSpeed||'?'} A${p.horse?.accel||'?'} S${p.horse?.stamina||'?'} L${p.horse?.luck||'?'} </span></div>`;
       $.playersList.appendChild(div);
+      const row = div.querySelector('.row'); if(row){ row.insertAdjacentHTML('afterbegin', (p.ready ? '<span class=\"badge\" style=\"border-color:#6cff80\">READY</span>' : '<span class=\"badge\" style=\"border-color:#ffd166\">待機</span>')); }
     });
   }
 
@@ -305,6 +309,18 @@
     if(state.net){
       const now = Date.now();
       await R(`lobbies/${code}`).set({
+        createdAt: now,
+        hostId: uid,
+        started: false,
+        trackLen: +$.trackLen.value,
+        seed: 0
+      });
+      subscribeLobby(code);
+    }
+    $.code.textContent = prettyCode(code);
+    history.replaceState(null,'', location.pathname + `?room=${code}`);
+    updateStartVisibility();
+  }`).set({
         createdAt: now,
         hostId: uid,
         started: false,
@@ -328,6 +344,10 @@
     }
     $.code.textContent = prettyCode(code);
     history.replaceState(null,'', location.pathname + `?room=${code}`);
+    updateStartVisibility();
+  }
+    $.code.textContent = prettyCode(code);
+    history.replaceState(null,'', location.pathname + `?room=${code}`);
   }
 
   // 自分の情報を保存
@@ -335,9 +355,11 @@
     const name = $.pName.value.trim() || `Player-${uid.slice(0,4).toUpperCase()}`;
     const horse = collectHorse();
     state.me.name = name; state.me.horse = horse; $.who.textContent = name;
+    state.me.ready = false;
+    updateReadyButton();
     if(state.net && state.lobbyCode){
       await R(`lobbies/${state.lobbyCode}/players/${uid}`).set({
-        name, horse, updatedAt: Date.now()
+        name, horse, updatedAt: Date.now(), ready: false
       });
     }
   }
@@ -348,9 +370,9 @@
     R(`lobbies/${code}`).on('value', snap=>{
       const v = snap.val()||{}; state.lobby = v; state.started = !!v.started; state.seed = v.seed||0; state.trackLen = v.trackLen||1200;
       $.trackLen.value = state.trackLen; syncLabels();
-      $.start.disabled = !state.isHost;
+      updateStartVisibility();
     });
-    R(`lobbies/${code}/players`).on('value', snap=>{ state.players = snap.val()||{}; renderPlayers(); });
+    R(`lobbies/${code}/players`).on('value', snap=>{ state.players = snap.val()||{}; renderPlayers(); updateStartVisibility(); });
     R(`lobbies/${code}/state`).on('value', snap=>{ state.lastState = snap.val()||null; });
     R(`lobbies/${code}/results`).on('value', snap=>{ state.results = snap.val()||[]; renderResults(); });
   }
@@ -359,6 +381,11 @@
   async function leaveLobby(){
     if(state.net && state.lobbyCode){
       await R(`lobbies/${state.lobbyCode}/players/${uid}`).remove();
+    }
+    state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[];
+    $.code.textContent='-'; $.who.textContent='未接続'; renderPlayers(); renderResults(); updateStartVisibility();
+    history.replaceState(null,'', location.pathname);
+  }/players/${uid}`).remove();
     }
     state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[];
     $.code.textContent='-'; $.who.textContent='未接続'; $.start.disabled=true; renderPlayers(); renderResults();
@@ -380,6 +407,32 @@
       stamina: +(+$.sSta.value).toFixed(0),
       luck: +(+$.sLuck.value).toFixed(2),
     };
+  }
+
+  // 準備フラグ & スタート可否
+  function everyoneReady(){
+    const ps = state.players || {};
+    const ids = Object.keys(ps);
+    if(ids.length===0) return false;
+    return ids.every(id => ps[id]?.ready);
+  }
+  function updateStartVisibility(){
+    const show = state.isHost && everyoneReady() && !state.started;
+    $.start.style.display = show ? 'inline-block' : 'none';
+  }
+  function updateReadyButton(){
+    if(!$.ready) return;
+    const on = !!state.me.ready;
+    $.ready.textContent = on ? '準備解除' : '準備OK';
+    $.ready.className = on ? 'secondary' : 'success';
+  }
+  async function setReady(val){
+    state.me.ready = !!val;
+    updateReadyButton();
+    if(state.net && state.lobbyCode){
+      await R(`lobbies/${state.lobbyCode}/players/${uid}`).update({ready: state.me.ready, updatedAt: Date.now()});
+    }
+    updateStartVisibility();
   }
 
   // === レースシミュ ===
@@ -404,6 +457,11 @@
       state.started = true; state.seed = Math.floor(Math.random()*1e9);
       if(state.net){
         await R(`lobbies/${state.lobbyCode}`).update({ started:true, seed: state.seed, trackLen: +$.trackLen.value });
+      }
+      updateStartVisibility();
+      await this.countdownAnim();
+      if(state.isHost){ this.loopHost(); }
+    }`).update({ started:true, seed: state.seed, trackLen: +$.trackLen.value });
       }
       await this.countdownAnim();
       if(state.isHost){ this.loopHost(); }
@@ -522,6 +580,10 @@
     await R(`lobbies/${state.lobbyCode}`).update({ started:false, seed:0 });
     await R(`lobbies/${state.lobbyCode}/state`).remove();
     await R(`lobbies/${state.lobbyCode}/results`).remove();
+    state.started=false; state.results=[]; state.lastState=null; sim.reset(); drawRace(true); updateStartVisibility();
+  }`).update({ started:false, seed:0 });
+    await R(`lobbies/${state.lobbyCode}/state`).remove();
+    await R(`lobbies/${state.lobbyCode}/results`).remove();
     state.started=false; state.results=[]; state.lastState=null; sim.reset(); drawRace(true);
   }
 
@@ -535,8 +597,11 @@
     if(!state.lobbyCode) return; navigator.clipboard.writeText(state.lobbyCode); $.copy.textContent='✅'; setTimeout(()=>$.copy.textContent='📋', 1200);
   });
   $.save.addEventListener('click', upsertMe);
+  $.ready.addEventListener('click', ()=> setReady(!state.me.ready));
   $.start.addEventListener('click', async ()=>{
     if(!state.isHost){ return; }
+    if(!everyoneReady()){ alert('全員の準備がまだ完了していません'); return; }
+    if(!state.players[uid]?.ready){ alert('ホストも「準備OK」を押してください'); return; }
     await upsertMe();
     sim.start();
   });

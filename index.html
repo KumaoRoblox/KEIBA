@@ -20,9 +20,9 @@
     header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); backdrop-filter: blur(6px);}    
     header h1{margin:0; font-size:18px; letter-spacing:.4px}
     header .tag{font-size:12px; color:var(--muted)}
-    main{display:grid; grid-template-columns:minmax(720px,880px) 1fr; gap:14px; padding:0 14px 14px}
+    main{display:grid; grid-template-columns:minmax(560px,680px) 1fr; gap:14px; padding:0 14px 14px}
     @media (max-width:1024px){ main{grid-template-columns:1fr} }
-    @media (min-width:1600px){ main{ grid-template-columns:minmax(880px,960px) 1fr } }
+    @media (min-width:1600px){ main{ grid-template-columns:minmax(680px,760px) 1fr } }
 
     .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00)); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
     .card h2{font-size:15px; margin:0 0 10px 0; letter-spacing:.3px; color:#dfe2ff}
@@ -60,14 +60,13 @@
     #overlay .big{font-size:72px; font-weight:700; text-shadow:0 10px 30px rgba(0,0,0,.4)}
     #results{position:absolute; right:16px; top:16px; background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:12px; padding:10px; max-width:300px}
 
-    .slider{display:grid; grid-template-columns:120px minmax(520px,1fr) 90px; gap:12px; align-items:center; min-height:44px}
-    input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:12px; background:transparent; cursor:pointer}
+    .slider{display:grid; grid-template-columns:120px minmax(280px,420px) 90px; gap:12px; align-items:center; min-height:44px}
+    input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:10px; background:transparent; cursor:pointer}
     input[type=range]::-webkit-slider-runnable-track{height:9px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
     input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); margin-top:-6px; box-shadow:0 2px 8px rgba(0,0,0,.35)}
     input[type=range]:disabled::-webkit-slider-thumb{background:#9aa0c7; border-color:#9aa0c7}
     input[type=range]::-moz-range-track{height:10px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
     input[type=range]::-moz-range-thumb{width:22px; height:22px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); box-shadow:0 2px 8px rgba(0,0,0,.35)}
-    input[type=range]:disabled::-moz-range-thumb{background:#9aa0c7; border-color:#9aa0c7}
 
     .help{font-size:12px; color:var(--muted)}
     .warn{color:var(--warn)}
@@ -150,7 +149,7 @@
 
           <div class="row">
             <button id="saveHorseBtn">設定を保存 / 更新</button>
-            <button id="readyBtn" class="success">準備OK</button>
+            <button id="readyBtn" class="success" style="display:none">準備OK</button>
             <button id="startBtn" class="danger" style="display:none">ゲーム開始（ホストのみ）</button>
           </div>
           <div class="help">
@@ -213,33 +212,81 @@
   };
 
   const el = (id)=>document.getElementById(id);
-  const uid = localStorage.getItem('uid') || (()=>{const v=crypto.getRandomValues(new Uint32Array(4)); const s=[...v].map(x=>x.toString(16).padStart(8,'0')).join(''); localStorage.setItem('uid', s); return s;})()
-  const state = { net:false, app:null, db:null, me:{ id:uid, name:"", horse:null, ready:false }, lobby:null, lobbyCode:null, isHost:false, players:{}, started:false, seed:null, results:[], ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1), lanes:[], lastState:null, trackLen:1200, racePlayerIds:[], abandoned:null };
+  const uid = localStorage.getItem('uid') || (()=>{const v=crypto.getRandomValues(new Uint32Array(4)); const s=[...v].map(x=>x.toString(16).padStart(8,'0')).join(''); localStorage.setItem('uid', s); return s;})();
 
-  const $ = { code: el('lobbyCode'), who: el('whoami'), hostBadge: el('hostBadge'), onlineBadge: el('onlineBadge'), create: el('createLobbyBtn'), joinBtn: el('joinLobbyBtn'), joinCode: el('joinCode'), copy: el('copyCode'), pName: el('playerName'), hName: el('horseName'), sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'), vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'), save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'), trackLen: el('trackLen'), trackRow: el('trackRow'), vLen: el('vLen'), canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'), leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn'), cfgPreview: el('cfgPreview') };
+  const state = {
+    net:false, app:null, db:null,
+    me:{ id:uid, name:"", horse:null, ready:false },
+    lobby:null, lobbyCode:null, isHost:false, players:{},
+    started:false, seed:null, results:[],
+    ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
+    lanes:[], lastState:null, trackLen:1200,
+    racePlayerIds:[],
+    abandoned:null
+  };
 
-  function syncLabels(){ $.vTop.textContent=(+$.sTop.value).toFixed(1); $.vAcc.textContent=(+$.sAcc.value).toFixed(2); $.vSta.textContent=(+$.sSta.value).toFixed(0); $.vLuck.textContent=(+$.sLuck.value).toFixed(2); $.vLen.textContent=(+$.trackLen.value).toFixed(0); $.colorBox.style.background=$.hColor.value; }
-  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>i.addEventListener('input', ()=>{ syncLabels(); if(state.me.ready) setReady(false); }));
+  const $ = {
+    code: el('lobbyCode'), who: el('whoami'), hostBadge: el('hostBadge'), onlineBadge: el('onlineBadge'),
+    create: el('createLobbyBtn'), joinBtn: el('joinLobbyBtn'), joinCode: el('joinCode'), copy: el('copyCode'),
+    pName: el('playerName'), hName: el('horseName'),
+    sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'),
+    vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'),
+    save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'),
+    trackLen: el('trackLen'), trackRow: el('trackRow'), vLen: el('vLen'),
+    canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
+    leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn'), cfgPreview: el('cfgPreview'),
+  };
+
+  function syncLabels(){
+    $.vTop.textContent=(+$.sTop.value).toFixed(1);
+    $.vAcc.textContent=(+$.sAcc.value).toFixed(2);
+    $.vSta.textContent=(+$.sSta.value).toFixed(0);
+    $.vLuck.textContent=(+$.sLuck.value).toFixed(2);
+    if($.trackLen) $.vLen.textContent=(+$.trackLen.value).toFixed(0);
+    $.colorBox.style.background=$.hColor.value;
+  }
+  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(i=>{ if(i) i.addEventListener('input', ()=>{ syncLabels(); if(state.me.ready) setReady(false); }); });
   syncLabels();
 
-  function initFirebase(){ if(typeof window.firebase==='undefined'){ $.onlineBadge.textContent='オフライン（SDK未読込）'; return; } if(!firebaseConfig || !firebaseConfig.apiKey){ $.onlineBadge.textContent='オフライン（デモ）'; return; } try{ state.app=firebase.initializeApp(firebaseConfig); state.db=firebase.database(); state.net=true; firebase.auth().signInAnonymously().catch(console.error); $.onlineBadge.textContent='オンライン有効（Firebase）'; }catch(e){ console.error(e); $.onlineBadge.textContent='オフライン（初期化エラー）'; } }
+  function initFirebase(){
+    if(typeof window.firebase==='undefined'){ $.onlineBadge.textContent='オフライン（SDK未読込）'; return; }
+    if(!firebaseConfig || !firebaseConfig.apiKey){ $.onlineBadge.textContent='オフライン（デモ）'; return; }
+    try{
+      state.app=firebase.initializeApp(firebaseConfig);
+      state.db=firebase.database();
+      state.net=true;
+      firebase.auth().signInAnonymously().catch(console.error);
+      $.onlineBadge.textContent='オンライン有効（Firebase）';
+    }catch(e){ console.error(e); $.onlineBadge.textContent='オフライン（初期化エラー）'; }
+  }
   initFirebase();
 
   const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
-  const randSeeded=(seed)=>{let s=seed>>>0; return ()=>{ s=(s*1664525+1013904223)>>>0; return s/0x100000000; }};
+  const randSeeded=(seed)=>{ let s=seed>>>0; return ()=>{ s=(s*1664525+1013904223)>>>0; return s/0x100000000; } };
   const R=(path)=> state.db?state.db.ref(path):null;
 
   function makeCode(){ return String(Math.floor(Math.random()*10000)).padStart(4,'0'); }
 
   const COLOR_PALETTE=['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#e84393','#d35400','#27ae60','#2980b9','#8e44ad','#16a085','#2c3e50'];
-  function uniqueColor(desired, excludeSelf=true){ const used=new Set(Object.entries(state.players||{}).filter(([id])=>!excludeSelf||id!==uid).map(([,p])=>p&&p.horse&&p.horse.color).filter(Boolean)); if(desired && !used.has(desired)) return desired; for(const c of COLOR_PALETTE){ if(!used.has(c)) return c; } for(let i=0;i<360;i+=27){ const c=`hsl(${(i+Math.floor(Math.random()*27))%360} 70% 60%)`; if(!used.has(c)) return c; } return '#7dd3fc'; }
+  function uniqueColor(desired, excludeSelf=true){
+    const used=new Set(Object.entries(state.players||{})
+      .filter(([id])=>!excludeSelf||id!==uid)
+      .map(([,p])=>p&&p.horse&&p.horse.color)
+      .filter(Boolean));
+    if(desired && !used.has(desired)) return desired;
+    for(const c of COLOR_PALETTE){ if(!used.has(c)) return c; }
+    for(let i=0;i<360;i+=27){ const c=`hsl(${(i+Math.floor(Math.random()*27))%360} 70% 60%)`; if(!used.has(c)) return c; }
+    return '#7dd3fc';
+  }
 
-  function buildLanesFromPlayers(){ const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ lanes.push({id, color:(p&&p.horse&&p.horse.color)||'#7dd3fc'}); }); state.lanes=lanes; }
+  function buildLanesFromPlayers(){
+    const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ lanes.push({id, color:(p&&p.horse&&p.horse.color)||'#7dd3fc'}); });
+    state.lanes=lanes;
+  }
 
   function updateHeader(){ el('hostBadge').textContent = state.isHost? 'ホスト' : '参加者'; }
 
-  // ホスト専用UI表示・ロック
   function updateRoleUI(){
     const host = state.isHost;
     if($.trackRow) $.trackRow.style.display = host ? '' : 'none';
@@ -250,28 +297,41 @@
     updateStartVisibility();
   }
 
-  // レース中/役割に応じた入力ロック
   function applyLockState(){
     const trackEditable = state.isHost && !state.started;
     [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.save].forEach(e=>{ if(e) e.disabled = !!state.started; });
     if($.trackLen){ $.trackLen.disabled = !trackEditable; }
   }
 
-  // ボタンの有効/無効
   function updateButtonsState(){
     const disableAll = state.started;
     const btns = [ $.create,$.joinBtn,$.save,$.ready,$.start,$.leave,$.reset ];
     btns.forEach(b=>{ if(!b) return; b.disabled = !!disableAll; });
-    // ホストの中断ボタンだけはレース中に表示＆有効
     const showAbort = state.isHost && state.started && !state.abandoned;
     if($.abort){ $.abort.style.display = showAbort ? 'inline-block' : 'none'; $.abort.disabled = !showAbort; }
   }
 
-  function renderPlayers(){ $.playersList.innerHTML=''; const keys=Object.keys(state.players||{}); if(keys.length===0){ $.playersList.innerHTML='<div class="muted">（まだ参加者はいません）</div>'; return; } keys.forEach(id=>{ const p=state.players[id]; if(!p) return; const div=document.createElement('div'); div.className='row'; div.style.justifyContent='space-between'; const status=p.ready?'<span class="badge" style="border-color:#6cff80">READY</span>':'<span class="badge" style="border-color:#ffd166">待機</span>'; div.innerHTML=`<div><b>${p.name||'名無し'}</b> <span class="muted">/ ${p.horse&&p.horse.name||'馬'}</span></div>
+  function renderPlayers(){
+    $.playersList.innerHTML='';
+    const keys=Object.keys(state.players||{});
+    if(keys.length===0){ $.playersList.innerHTML='<div class="muted">（まだ参加者はいません）</div>'; return; }
+    keys.forEach(id=>{
+      const p=state.players[id]; if(!p) return;
+      const div=document.createElement('div'); div.className='row'; div.style.justifyContent='space-between';
+      const status=p.ready?'<span class="badge" style="border-color:#6cff80">READY</span>':'<span class="badge" style="border-color:#ffd166">待機</span>';
+      div.innerHTML=`<div><b>${p.name||'名無し'}</b> <span class="muted">/ ${p.horse&&p.horse.name||'馬'}</span></div>
         <div class="row">${status} <span class="badge" style="border-color:${p.horse&&p.horse.color||'#888'}">${p.horse&&p.horse.color||'#888'}</span>
-        <span class="muted">V${p.horse&&p.horse.topSpeed||'?'} A${p.horse&&p.horse.accel||'?'} S${p.horse&&p.horse.stamina||'?'} L${p.horse&&p.horse.luck||'?'} </span></div>`; $.playersList.appendChild(div); }); }
+        <span class="muted">V${p.horse&&p.horse.topSpeed||'?'} A${p.horse&&p.horse.accel||'?'} S${p.horse&&p.horse.stamina||'?'} L${p.horse&&p.horse.luck||'?'} </span></div>`;
+      $.playersList.appendChild(div);
+    });
+  }
 
-  function renderResults(){ const res=state.results||[]; if(!res.length){ $.results.style.display='none'; $.results.innerHTML=''; return; } $.results.style.display='block'; $.results.innerHTML='<b>結果</b>'+ res.map(r=>`<div class="row" style="justify-content:space-between"><span>${r.rank}. <b>${r.player}</b> <span class="muted">/ ${r.horse}</span></span> <span class="badge" style="border-color:${r.color}">${r.color}</span></div>`).join(''); }
+  function renderResults(){
+    const res=state.results||[];
+    if(!res.length){ $.results.style.display='none'; $.results.innerHTML=''; return; }
+    $.results.style.display='block';
+    $.results.innerHTML='<b>結果</b>'+ res.map(r=>`<div class="row" style="justify-content:space-between"><span>${r.rank}. <b>${r.player}</b> <span class="muted">/ ${r.horse}</span></span> <span class="badge" style="border-color:${r.color}">${r.color}</span></div>`).join('');
+  }
 
   function everyoneReady(){ const ps=state.players||{}; const ids=Object.keys(ps); if(!ids.length) return false; return ids.every(id=>ps[id]&&ps[id].ready); }
   function updateStartVisibility(){ const show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
@@ -279,23 +339,84 @@
 
   function collectHorse(){ return { name: $.hName.value.trim()||'ノーマル', color: $.hColor.value, topSpeed:+(+$.sTop.value).toFixed(2), accel:+(+$.sAcc.value).toFixed(2), stamina:+(+$.sSta.value).toFixed(0), luck:+(+$.sLuck.value).toFixed(2) }; }
 
-  function ensurePresence(){ if(!state.net || !state.lobbyCode) return; try{ const pref=R(`lobbies/${state.lobbyCode}/players/${uid}`); pref && pref.onDisconnect().remove(); if(state.isHost){ const lref=R(`lobbies/${state.lobbyCode}`); lref && lref.child('started').onDisconnect().set(false); lref && lref.child('abandoned').onDisconnect().set({ at: Date.now(), reason:'host_disconnected' }); R(`lobbies/${state.lobbyCode}/state`).onDisconnect().remove(); R(`lobbies/${state.lobbyCode}/results`).onDisconnect().remove(); } }catch(e){ console.warn('presence onDisconnect set failed', e); } }
+  function ensurePresence(){
+    if(!state.net || !state.lobbyCode) return;
+    try{
+      const pref=R(`lobbies/${state.lobbyCode}/players/${uid}`);
+      pref && pref.onDisconnect().remove();
+      if(state.isHost){
+        const lref=R(`lobbies/${state.lobbyCode}`);
+        lref && lref.child('started').onDisconnect().set(false);
+        lref && lref.child('abandoned').onDisconnect().set({ at: Date.now(), reason:'host_disconnected' });
+        R(`lobbies/${state.lobbyCode}/state`).onDisconnect().remove();
+        R(`lobbies/${state.lobbyCode}/results`).onDisconnect().remove();
+      }
+    }catch(e){ console.warn('presence onDisconnect set failed', e); }
+  }
 
-  async function upsertMe(){ if(state.started){ ensurePresence(); return; } const name=$.pName.value.trim()||`Player-${uid.slice(0,4).toUpperCase()}`; let horse=collectHorse(); horse.color=uniqueColor(horse.color,true); $.hColor.value=horse.color; $.colorBox.style.background=horse.color; state.me.name=name; state.me.horse=horse; $.who.textContent=name; if(state.net && state.lobbyCode){ await R(`lobbies/${state.lobbyCode}/players/${uid}`).set({ name, horse, updatedAt:Date.now(), ready:state.me.ready||false }); ensurePresence(); } else { state.players[uid]={ name, horse, ready:state.me.ready||false }; renderPlayers(); buildLanesFromPlayers(); updateStartVisibility(); } }
+  async function upsertMe(){
+    if(state.started){ ensurePresence(); return; }
+    const name=$.pName.value.trim()||`Player-${uid.slice(0,4).toUpperCase()}`;
+    let horse=collectHorse();
+    horse.color=uniqueColor(horse.color,true);
+    $.hColor.value=horse.color; $.colorBox.style.background=horse.color;
+    state.me.name=name; state.me.horse=horse; $.who.textContent=name;
+    if(state.net && state.lobbyCode){
+      await R(`lobbies/${state.lobbyCode}/players/${uid}`).set({ name, horse, updatedAt:Date.now(), ready:state.me.ready||false });
+      ensurePresence();
+    } else {
+      state.players[uid]={ name, horse, ready:state.me.ready||false };
+      renderPlayers(); buildLanesFromPlayers(); updateStartVisibility();
+    }
+  }
 
   async function setReady(val){ state.me.ready=!!val; updateReadyButton(); if(state.net && state.lobbyCode){ await R(`lobbies/${state.lobbyCode}/players/${uid}`).update({ ready:state.me.ready, updatedAt:Date.now() }); } renderPlayers(); updateStartVisibility(); }
 
-  async function createLobby(){ const code=makeCode(); state.lobbyCode=code; state.isHost=true; updateHeader(); if(state.net){ await R(`lobbies/${code}`).set({ createdAt:Date.now(), hostId:uid, started:false, abandoned:null, trackLen:+$.trackLen.value, seed:0 }); subscribeLobby(code); } $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`); await upsertMe(); ensurePresence(); updateRoleUI(); }
+  async function createLobby(){
+    const code=makeCode(); state.lobbyCode=code; state.isHost=true; updateHeader();
+    if(state.net){ await R(`lobbies/${code}`).set({ createdAt:Date.now(), hostId:uid, started:false, abandoned:null, trackLen:+($.trackLen?$.trackLen.value:1200), seed:0 }); subscribeLobby(code); }
+    $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`);
+    await upsertMe(); ensurePresence(); updateRoleUI();
+  }
 
   async function joinLobby(code){ state.lobbyCode=code; state.isHost=false; updateHeader(); if(state.net){ subscribeLobby(code); ensurePresence(); await sleep(50); await upsertMe(); } $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`); updateRoleUI(); }
 
   async function abandonRace(reason){ if(!state.net || !state.lobbyCode) return; await R(`lobbies/${state.lobbyCode}`).update({ started:false, abandoned:{ at:Date.now(), reason } }); await R(`lobbies/${state.lobbyCode}/state`).remove(); await R(`lobbies/${state.lobbyCode}/results`).remove(); }
 
-  function subscribeLobby(code){ if(!state.net) return; R(`lobbies/${code}`).on('value', snap=>{ const v=snap.val()||{}; state.lobby=v; state.started=!!v.started; state.seed=v.seed||0; state.trackLen=v.trackLen||1200; state.abandoned=v.abandoned||null; $.trackLen.value=state.trackLen; syncLabels(); applyLockState(); updateButtonsState(); if(state.abandoned){ $.count.textContent='試合放棄'; } else if(!state.started){ $.count.textContent=''; } updateStartVisibility(); }); R(`lobbies/${code}/players`).on('value', snap=>{ state.players=snap.val()||{}; renderPlayers(); buildLanesFromPlayers(); updateRoleUI(); updateStartVisibility(); if(state.isHost && state.started && state.racePlayerIds.length){ const nowIds=new Set(Object.keys(state.players)); for(const pid of state.racePlayerIds){ if(!nowIds.has(pid)){ abandonRace('player_left'); break; } } } }); buildLanesFromPlayers(); updateStartVisibility(); if(state.isHost && state.started && state.racePlayerIds.length){ const nowIds=new Set(Object.keys(state.players)); for(const pid of state.racePlayerIds){ if(!nowIds.has(pid)){ abandonRace('player_left'); break; } } } }); R(`lobbies/${code}/state`).on('value', snap=>{ state.lastState=snap.val()||null; }); R(`lobbies/${code}/results`).on('value', snap=>{ state.results=snap.val()||[]; renderResults(); }); }
+  function subscribeLobby(code){ if(!state.net) return;
+    R(`lobbies/${code}`).on('value', snap=>{
+      const v=snap.val()||{};
+      state.lobby=v; state.started=!!v.started; state.seed=v.seed||0; state.trackLen=v.trackLen||1200; state.abandoned=v.abandoned||null;
+      if($.trackLen) $.trackLen.value=state.trackLen; syncLabels(); applyLockState(); updateButtonsState();
+      if(state.abandoned){ $.count.textContent='試合放棄'; } else if(!state.started){ $.count.textContent=''; }
+      updateStartVisibility();
+    });
+    R(`lobbies/${code}/players`).on('value', snap=>{
+      state.players=snap.val()||{}; renderPlayers(); buildLanesFromPlayers(); updateRoleUI(); updateStartVisibility();
+      if(state.isHost && state.started && state.racePlayerIds.length){
+        const nowIds=new Set(Object.keys(state.players));
+        for(const pid of state.racePlayerIds){ if(!nowIds.has(pid)){ abandonRace('player_left'); break; } }
+      }
+    });
+    R(`lobbies/${code}/state`).on('value', snap=>{ state.lastState=snap.val()||null; });
+    R(`lobbies/${code}/results`).on('value', snap=>{ state.results=snap.val()||[]; renderResults(); });
+  }
 
   async function leaveLobby(){ if(state.net && state.lobbyCode){ await R(`lobbies/${state.lobbyCode}/players/${uid}`).remove(); if(state.isHost && state.started){ await abandonRace('host_left'); } } state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[]; state.abandoned=null; $.code.textContent='-'; $.who.textContent='未接続'; renderPlayers(); buildLanesFromPlayers(); renderResults(); updateStartVisibility(); updateRoleUI(); history.replaceState(null,'', location.pathname); }
 
-  const sim = { running:false, horses:{}, order:[], reset(){ this.horses={}; this.order=[]; this.running=false; $.results.style.display='none'; $.count.textContent=''; }, setupFromPlayers(){ const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ const h=p.horse||{}; this.horses[id]={ id, name:p.name||id.slice(0,4), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id, color:h.color||'#fff'}); }); state.lanes=lanes; }, async start(){ this.reset(); this.setupFromPlayers(); state.started=true; state.abandoned=null; if(state.isHost){ state.seed=Math.floor(Math.random()*1e9); state.trackLen=+$.trackLen.value; state.racePlayerIds=Object.keys(state.players||{}); if(state.net){ await R(`lobbies/${state.lobbyCode}`).update({ started:true, abandoned:null, seed:state.seed, trackLen:state.trackLen }); } } updateButtonsState(); applyLockState(); for(let i=3;i>0;i--){ $.count.textContent=String(i); await sleep(800);} $.count.textContent='GO!'; await sleep(400); $.count.textContent=''; if(state.isHost){ this.loopHost(); } }, physics(dt,noise){ const L=state.trackLen; for(const id in this.horses){ const H=this.horses[id]; if(H.done) continue; const spec=H.horse; const fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); const accel=spec.accel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; H.v=clamp(H.v+accel*dt,0,spec.topSpeed*(1-0.4*fatigue)); H.x+=H.v*dt; H.s-=(0.015*H.v*H.v+0.5*dt); if(H.x>=L){ H.x=L; H.done=true; this.order.push(id);} } }, loopHost(){ this.running=true; const noise=randSeeded(state.seed); const L=state.trackLen; let last=performance.now(), sendAcc=0; const step=(now)=>{ if(!this.running||!state.started||state.abandoned){ return; } const dt=Math.min(0.05,(now-last)/1000); last=now; this.physics(dt,noise); sendAcc+=dt; if(sendAcc>0.10 && state.net){ const pos={}, vel={}; Object.values(this.horses).forEach(H=>{pos[H.id]=Math.round(H.x); vel[H.id]=Math.round(H.v*100)/100;}); const colors={}; Object.values(this.horses).forEach(H=>{ const p=state.players[H.id]; colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; }); R(`lobbies/${state.lobbyCode}/state`).set({ t:Date.now(), L, pos, vel, colors }); sendAcc=0; } drawRace(); if(this.order.length===Object.keys(this.horses).length){ this.finish(); return; } requestAnimationFrame(step); }; requestAnimationFrame(step); }, async finish(){ this.running=false; const out=this.order.map((id,idx)=>{ const p=state.players[id]; return { rank:idx+1, id, player:p&&p.name||id, horse:p&&p.horse&&p.horse.name||'馬', color:p&&p.horse&&p.horse.color||'#fff' }; }); if(state.net){ await R(`lobbies/${state.lobbyCode}/results`).set(out); await R(`lobbies/${state.lobbyCode}`).update({ started:false }); } state.results=out; renderResults(); state.started=false; updateButtonsState(); applyLockState(); } };
+  const sim = {
+    running:false, horses:{}, order:[],
+    reset(){ this.horses={}; this.order=[]; this.running=false; $.results.style.display='none'; $.count.textContent=''; },
+    setupFromPlayers(){ const lanes=[]; Object.entries(state.players||{}).forEach(([id,p])=>{ const h=p.horse||{}; this.horses[id]={ id, name:p.name||id.slice(0,4), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id, color:h.color||'#fff'}); }); state.lanes=lanes; },
+    async start(){ this.reset(); this.setupFromPlayers(); state.started=true; state.abandoned=null; if(state.isHost){ state.seed=Math.floor(Math.random()*1e9); state.trackLen=+($.trackLen?$.trackLen.value:1200); state.racePlayerIds=Object.keys(state.players||{}); if(state.net){ await R(`lobbies/${state.lobbyCode}`).update({ started:true, abandoned:null, seed:state.seed, trackLen:state.trackLen }); } }
+      updateButtonsState(); applyLockState();
+      for(let i=3;i>0;i--){ $.count.textContent=String(i); await sleep(800);} $.count.textContent='GO!'; await sleep(400); $.count.textContent='';
+      if(state.isHost){ this.loopHost(); }
+    },
+    physics(dt,noise){ const L=state.trackLen; for(const id in this.horses){ const H=this.horses[id]; if(H.done) continue; const spec=H.horse; const fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); const accel=spec.accel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; H.v=clamp(H.v+accel*dt,0,spec.topSpeed*(1-0.4*fatigue)); H.x+=H.v*dt; H.s-=(0.015*H.v*H.v+0.5*dt); if(H.x>=L){ H.x=L; H.done=true; this.order.push(id);} } },
+    loopHost(){ this.running=true; const noise=randSeeded(state.seed); const L=state.trackLen; let last=performance.now(), sendAcc=0; const step=(now)=>{ if(!this.running||!state.started||state.abandoned){ return; } const dt=Math.min(0.05,(now-last)/1000); last=now; this.physics(dt,noise); sendAcc+=dt; if(sendAcc>0.10 && state.net){ const pos={}, vel={}; Object.values(this.horses).forEach(H=>{pos[H.id]=Math.round(H.x); vel[H.id]=Math.round(H.v*100)/100;}); const colors={}; Object.values(this.horses).forEach(H=>{ const p=state.players[H.id]; colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; }); R(`lobbies/${state.lobbyCode}/state`).set({ t:Date.now(), L, pos, vel, colors }); sendAcc=0; } drawRace(); if(this.order.length===Object.keys(this.horses).length){ this.finish(); return; } requestAnimationFrame(step); }; requestAnimationFrame(step); },
+    async finish(){ this.running=false; const out=this.order.map((id,idx)=>{ const p=state.players[id]; return { rank:idx+1, id, player:p&&p.name||id, horse:p&&p.horse&&p.horse.name||'馬', color:p&&p.horse&&p.horse.color||'#fff' }; }); if(state.net){ await R(`lobbies/${state.lobbyCode}/results`).set(out); await R(`lobbies/${state.lobbyCode}`).update({ started:false }); } state.results=out; renderResults(); state.started=false; updateButtonsState(); applyLockState(); }
+  };
 
   function setupCanvas(){ const c=$.canvas; const wrap=document.getElementById('canvasWrap'); const dpr=state.dpr; c.width=Math.floor(wrap.clientWidth*dpr); c.height=Math.floor(wrap.clientHeight*dpr); state.ctx=c.getContext('2d'); drawRace(true); }
   window.addEventListener('resize', setupCanvas);

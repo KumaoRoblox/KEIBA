@@ -22,7 +22,62 @@
     header .tag{font-size:12px; color:var(--muted)}
     main{display:grid; grid-template-columns:minmax(320px,700px) 1fr; gap:14px; padding:0 14px 14px}
     
-    /* スマホ対応のレスポンシブ */
+    /* レース中のフルスクリーン表示 */
+    main.racing {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr;
+      height: calc(100vh - 60px);
+      padding: 0;
+      gap: 0;
+    }
+    main.racing #left {
+      display: none;
+    }
+    main.racing #right {
+      height: 100%;
+      border-radius: 0;
+      margin: 0;
+    }
+    main.racing #canvasWrap {
+      height: 100%;
+      border-radius: 0;
+    }
+    
+    /* レース中のコントロールパネル */
+    #raceControls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 100;
+    }
+    #raceControls.show {
+      display: flex;
+    }
+    #raceControls button {
+      padding: 6px 12px;
+      font-size: 12px;
+      min-width: 120px;
+    }
+    
+    @media (max-width: 768px) {
+      #raceControls {
+        top: 5px;
+        right: 5px;
+        padding: 6px;
+      }
+      #raceControls button {
+        padding: 5px 8px;
+        font-size: 11px;
+        min-width: 100px;
+      }
+    }
     @media (max-width:1024px){ 
       main{grid-template-columns:1fr; padding:0 8px 8px} 
     }
@@ -279,8 +334,15 @@
         <canvas id="race"></canvas>
         <div id="overlay"><div class="big" id="countDown"></div></div>
         <div id="results" class="col" style="display:none"></div>
+        
+        <!-- レース中のコントロールパネル -->
+        <div id="raceControls">
+          <button id="leaveBtn2" class="secondary">ロビーから抜ける</button>
+          <button id="resetBtn2" class="secondary">レースをリセット</button>
+          <button id="abortBtn2" class="danger">試合を中断</button>
+        </div>
       </div>
-      <div class="row" style="margin-top:10px">
+      <div class="row" style="margin-top:10px" id="normalControls">
         <button id="leaveBtn" class="secondary">ロビーから抜ける</button>
         <button id="resetBtn" class="secondary">レースをリセット（ホスト）</button>
         <button id="abortBtn" class="danger" style="display:none">試合を中断（ホスト）</button>
@@ -419,6 +481,32 @@
     btns.forEach(b=>{ if(!b) return; b.disabled = !!disableAll; });
     const showAbort = state.isHost && state.started && !state.abandoned;
     if($.abort){ $.abort.style.display = showAbort ? 'inline-block' : 'none'; $.abort.disabled = !showAbort; }
+    
+    // レース中のUIの切り替え
+    const main = document.querySelector('main');
+    const raceControls = document.getElementById('raceControls');
+    const normalControls = document.getElementById('normalControls');
+    
+    if(state.started && !state.abandoned) {
+      // レース中：フルスクリーン表示
+      main.classList.add('racing');
+      if(raceControls) raceControls.classList.add('show');
+      if(normalControls) normalControls.style.display = 'none';
+      
+      // レース中コントロールボタンの設定
+      const leave2 = document.getElementById('leaveBtn2');
+      const reset2 = document.getElementById('resetBtn2');
+      const abort2 = document.getElementById('abortBtn2');
+      
+      if(leave2) leave2.disabled = false;
+      if(reset2) { reset2.style.display = state.isHost ? 'block' : 'none'; reset2.disabled = false; }
+      if(abort2) { abort2.style.display = state.isHost ? 'block' : 'none'; abort2.disabled = false; }
+    } else {
+      // 通常時：通常レイアウト
+      main.classList.remove('racing');
+      if(raceControls) raceControls.classList.remove('show');
+      if(normalControls) normalControls.style.display = 'flex';
+    }
   }
 
   function renderPlayers(){
@@ -660,17 +748,26 @@
       ctx.lineWidth = 1*dpr;
       ctx.stroke();
       
-      // プレイヤー名をコース内側に表示
-      const isSmall = c.width < 400*dpr;
-      if(!isSmall && p?.name) {
+      // プレイヤー名をコース内側に表示（スマホでも表示するよう修正）
+      if(p?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
-        ctx.font = `${9*dpr}px system-ui`;
+        const fontSize = isSmall ? 8*dpr : 9*dpr;
+        ctx.font = `${fontSize}px system-ui`;
         const nameWidth = ctx.measureText(p.name).width;
         
         // 内側に向かって名前を配置
-        const innerX = centerX + (laneRadiusX - laneSpacing) * Math.cos(angle);
-        const innerY = centerY + (laneRadiusY - laneSpacing) * Math.sin(angle);
-        ctx.fillText(p.name, innerX - nameWidth/2, innerY + 3*dpr);
+        const innerRadius = Math.max(10*dpr, Math.min(laneRadiusX, laneRadiusY) - laneSpacing);
+        const innerX = centerX + (innerRadius * 0.7) * Math.cos(angle);
+        const innerY = centerY + (innerRadius * 0.7) * Math.sin(angle);
+        
+        // スマホでは背景を追加して見やすくする
+        if(isSmall) {
+          ctx.fillStyle = 'rgba(0,0,0,.6)';
+          ctx.fillRect(innerX - nameWidth/2 - 2*dpr, innerY - fontSize/2 - 1*dpr, nameWidth + 4*dpr, fontSize + 2*dpr);
+        }
+        
+        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        ctx.fillText(p.name, innerX - nameWidth/2, innerY + 2*dpr);
       }
       
       // 距離表示（小さく）
@@ -730,9 +827,20 @@
   $.save.addEventListener('click', upsertMe);
   $.ready.addEventListener('click', ()=> setReady(!state.me.ready));
   $.start.addEventListener('click', async ()=>{ if(!state.isHost) return; if(!everyoneReady()){ alert('全員の準備がまだ完了していません'); return; } if(!(state.players[uid]&&state.players[uid].ready)){ alert('ホストも「準備OK」を押してください'); return; } await upsertMe(); sim.start(); });
+  
+  // 通常のコントロールボタン
   $.leave.addEventListener('click', leaveLobby);
   $.reset.addEventListener('click', async ()=>{ if(!state.isHost||!state.net||!state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtonsState(); applyLockState(); updateStartVisibility(); });
   $.abort.addEventListener('click', async ()=>{ await abortToLobby(); });
+
+  // レース中のコントロールボタン
+  const leave2 = document.getElementById('leaveBtn2');
+  const reset2 = document.getElementById('resetBtn2');
+  const abort2 = document.getElementById('abortBtn2');
+  
+  if(leave2) leave2.addEventListener('click', leaveLobby);
+  if(reset2) reset2.addEventListener('click', async ()=>{ if(!state.isHost||!state.net||!state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtonsState(); applyLockState(); updateStartVisibility(); });
+  if(abort2) abort2.addEventListener('click', async ()=>{ await abortToLobby(); });
 
   // URLから自動参加
   (function autoJoin(){ const q=new URLSearchParams(location.search); const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); if(room){ joinLobby(room.padStart(4,'0')); } else { updateRoleUI(); } })();

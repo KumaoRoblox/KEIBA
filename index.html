@@ -20,7 +20,7 @@
     header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); backdrop-filter: blur(6px);}    
     header h1{margin:0; font-size:18px; letter-spacing:.4px}
     header .tag{font-size:12px; color:var(--muted)}
-    main{display:grid; grid-template-columns:minmax(560px,680px) 1fr; gap:14px; padding:0 14px 14px}
+    main{display:grid; grid-template-columns:minmax(320px,700px) 1fr; gap:14px; padding:0 14px 14px}
     
     /* スマホ対応のレスポンシブ */
     @media (max-width:1024px){ 
@@ -30,38 +30,53 @@
       header{padding:6px 8px; font-size:12px}
       header h1{font-size:14px}
       header .tag{font-size:10px}
-      main{padding:0 2px 2px; gap:4px}
-      .pad{padding:8px}
-      .grid2{grid-template-columns:1fr; gap:4px}
-      .grid3{grid-template-columns:1fr; gap:4px}
+      main{padding:0 2px 2px; gap:4px; max-height:100vh; overflow-y:auto}
+      .pad{padding:6px}
+      .grid2{grid-template-columns:1fr; gap:3px}
+      .grid3{grid-template-columns:1fr; gap:3px}
       .slider{
-        grid-template-columns:1fr; 
-        gap:4px; 
+        display:flex; 
+        flex-direction:column;
+        gap:2px; 
         text-align:center;
         min-height:auto;
+        padding:4px;
+        border:1px solid var(--border);
+        border-radius:8px;
+        margin-bottom:2px;
       }
       .slider > div:first-child{
-        font-size:12px; 
+        font-size:11px; 
         font-weight:500;
+        margin-bottom:2px;
       }
       .slider > div:last-child{
-        font-size:11px;
+        font-size:10px;
+        margin-top:2px;
       }
-      .row{flex-wrap:wrap; gap:4px; font-size:12px}
-      .pill{padding:3px 6px; font-size:10px}
-      .badge{font-size:10px; padding:1px 4px}
-      .help{font-size:10px}
+      .slider input[type=range]{
+        margin:2px 0;
+      }
+      .row{flex-wrap:wrap; gap:3px; font-size:11px}
+      .pill{padding:2px 4px; font-size:9px}
+      .badge{font-size:9px; padding:1px 3px}
+      .help{font-size:9px; line-height:1.3}
       input[type="text"], input[type="number"], button{
         padding:6px 8px; 
-        font-size:12px;
-        border-radius:8px;
+        font-size:11px;
+        border-radius:6px;
       }
-      .card h2{font-size:13px; margin:0 0 6px 0}
-      .muted{font-size:11px}
-      button{padding:8px 10px}
-      .footerNote{font-size:10px; padding:0 8px 8px}
+      .card h2{font-size:12px; margin:0 0 4px 0}
+      .muted{font-size:10px}
+      button{padding:6px 8px; font-size:11px}
+      .footerNote{font-size:9px; padding:0 4px 4px}
+      .col{gap:4px}
+      
+      /* スマホでの高さ調整 */
+      .card{margin-bottom:4px}
+      #left{max-height:70vh; overflow-y:auto}
     }
-    @media (min-width:1600px){ main{ grid-template-columns:minmax(680px,760px) 1fr } }
+    @media (min-width:1600px){ main{ grid-template-columns:minmax(700px,800px) 1fr } }
 
     .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00)); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
     .card h2{font-size:15px; margin:0 0 10px 0; letter-spacing:.3px; color:#dfe2ff}
@@ -129,7 +144,19 @@
     }
     #results{position:absolute; right:16px; top:16px; background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:12px; padding:10px; max-width:300px}
 
-    .slider{display:grid; grid-template-columns:120px minmax(280px,420px) 90px; gap:12px; align-items:center; min-height:44px}
+    .slider{display:grid; grid-template-columns:140px minmax(200px,1fr) 100px; gap:12px; align-items:center; min-height:44px}
+    
+    /* PC版での調整コンテナ */
+    .adjustments-container{
+      display:grid; 
+      grid-template-columns:1fr 1fr; 
+      gap:12px;
+    }
+    @media (min-width:1200px){
+      .adjustments-container{
+        grid-template-columns:1fr 1fr 1fr;
+      }
+    }
     input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:10px; background:transparent; cursor:pointer}
     input[type=range]::-webkit-slider-runnable-track{height:9px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
     input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); margin-top:-6px; box-shadow:0 2px 8px rgba(0,0,0,.35)}
@@ -155,20 +182,8 @@
     <section class="card pad" id="left">
       <h2>ロビー</h2>
       <div class="col" id="lobbySection">
-        <div class="grid2">
-          <button id="createLobbyBtn">＋ ロビー作成</button>
-          <div class="row">
-            <input type="text" id="joinCode" placeholder="4桁コード" />
-            <button id="joinLobbyBtn" class="secondary">参加</button>
-          </div>
-        </div>
-        <div class="row">
-          <div class="pill">共有コード: <span id="lobbyCode" class="code">-</span> <span id="copyCode" class="copy">📋</span></div>
-          <div class="pill">あなた: <span id="whoami">未接続</span></div>
-          <div class="pill"><span id="hostBadge">参加者</span></div>
-        </div>
-
-        <div class="col" id="nameHorse" style="display:none">
+        <!-- 最初は名前入力のみ表示 -->
+        <div class="col" id="initialSetup">
           <div class="grid2">
             <div>
               <label>プレイヤー名</label>
@@ -179,58 +194,75 @@
               <input type="text" id="horseName" placeholder="例：サンダー" />
             </div>
           </div>
-
-          <div class="grid3">
-            <div class="slider">
-              <div>最高速度</div>
-              <input type="range" id="sTop" min="1" max="50" step="0.1" value="14">
-              <div><span id="vTop">14.0</span> m/s</div>
-            </div>
-            <div class="slider">
-              <div>加速度</div>
-              <input type="range" id="sAcc" min="0.1" max="10" step="0.01" value="2.2">
-              <div><span id="vAcc">2.20</span> m/s²</div>
-            </div>
-            <div class="slider">
-              <div>スタミナ</div>
-              <input type="range" id="sSta" min="10" max="5000" step="1" value="200">
-              <div><span id="vSta">200</span> SP</div>
-            </div>
-          </div>
-          <div class="grid3">
-            <div class="slider">
-              <div>運（ゆらぎ）</div>
-              <input type="range" id="sLuck" min="0" max="3" step="0.01" value="0.5">
-              <div><span id="vLuck">0.50</span></div>
-            </div>
-            <div class="slider">
-              <div>色</div>
-              <input type="color" id="horseColor" value="#7dd3fc" />
-              <div><span class="colorBox" id="colorBox"></span></div>
-            </div>
-            <!-- 距離はホストのみ表示 -->
-            <div class="slider" id="trackRow" style="display:none">
-              <div>距離</div>
-              <input type="range" id="trackLen" min="200" max="5000" step="10" value="1200">
-              <div><span id="vLen">1200</span> m</div>
-            </div>
-          </div>
-
           <div class="row">
-            <button id="saveHorseBtn">設定を保存 / 更新</button>
-            <button id="readyBtn" class="success" style="display:none">準備OK</button>
-            <button id="startBtn" class="danger" style="display:none">ゲーム開始（ホストのみ）</button>
-          </div>
-          <div class="help">
-            <div>・ロビー作成者がホストです。参加者は4桁コード入力で参加できます。</div>
-            <div>・<b>レース中はステータスや色の変更はできません</b>（自動でロック）。</div>
-            <div>・<b>誰かが途中で抜けたら試合は放棄</b>（全員に通知）。</div>
+            <button id="createLobbyBtn">＋ ロビー作成</button>
+            <div class="row">
+              <input type="text" id="joinCode" placeholder="4桁コード" style="max-width:120px" />
+              <button id="joinLobbyBtn" class="secondary">参加</button>
+            </div>
           </div>
         </div>
 
-        <div class="card pad" style="margin-top:10px">
-          <h2>参加者一覧</h2>
-          <div id="playersList" class="col"></div>
+        <!-- ロビー参加後に表示される詳細設定 -->
+        <div class="col" id="detailedSetup" style="display:none">
+          <div class="row">
+            <div class="pill">共有コード: <span id="lobbyCode" class="code">-</span> <span id="copyCode" class="copy">📋</span></div>
+            <div class="pill">あなた: <span id="whoami">未接続</span></div>
+            <div class="pill"><span id="hostBadge">参加者</span></div>
+          </div>
+
+          <div class="col" id="horseAdjustments">
+            <h3 style="margin:8px 0 4px 0; font-size:14px">馬の能力調整</h3>
+            <div class="adjustments-container">
+              <div class="slider">
+                <div>最高速度</div>
+                <input type="range" id="sTop" min="1" max="50" step="0.1" value="14">
+                <div><span id="vTop">14.0</span> m/s</div>
+              </div>
+              <div class="slider">
+                <div>加速度</div>
+                <input type="range" id="sAcc" min="0.1" max="10" step="0.01" value="2.2">
+                <div><span id="vAcc">2.20</span> m/s²</div>
+              </div>
+              <div class="slider">
+                <div>スタミナ</div>
+                <input type="range" id="sSta" min="10" max="5000" step="1" value="200">
+                <div><span id="vSta">200</span> SP</div>
+              </div>
+              <div class="slider">
+                <div>運（ゆらぎ）</div>
+                <input type="range" id="sLuck" min="0" max="3" step="0.01" value="0.5">
+                <div><span id="vLuck">0.50</span></div>
+              </div>
+              <div class="slider">
+                <div>馬の色</div>
+                <input type="color" id="horseColor" value="#7dd3fc" />
+                <div><span class="colorBox" id="colorBox" style="display:inline-block; width:20px; height:20px; border-radius:4px; border:1px solid var(--border)"></span></div>
+              </div>
+              <!-- 距離はホストのみ表示 -->
+              <div class="slider" id="trackRow" style="display:none">
+                <div>レース距離</div>
+                <input type="range" id="trackLen" min="200" max="5000" step="10" value="1200">
+                <div><span id="vLen">1200</span> m</div>
+              </div>
+            </div>
+
+            <div class="row">
+              <button id="saveHorseBtn">設定を保存 / 更新</button>
+              <button id="readyBtn" class="success" style="display:none">準備OK</button>
+              <button id="startBtn" class="danger" style="display:none">ゲーム開始（ホストのみ）</button>
+            </div>
+            <div class="help">
+              <div>・ロビー作成者がホストです。参加者は4桁コード入力で参加できます。</div>
+              <div>・<b>レース中はステータスや色の変更はできません</b>（自動でロック）。</div>
+              <div>・<b>誰かが途中で抜けたら試合は放棄</b>（全員に通知）。</div>
+            </div>
+          </div>
+
+          <div class="card pad" style="margin-top:8px">
+            <h2>参加者一覧</h2>
+            <div id="playersList" class="col"></div>
+          </div>
         </div>
 
         <details>
@@ -355,10 +387,21 @@
   function updateRoleUI(){
     const host = state.isHost;
     const joined = !!state.lobbyCode && (!!(state.players && state.players[uid]) || state.isHost);
+    
+    // 初期画面と詳細設定画面の表示切り替え
+    const initialSetup = document.getElementById('initialSetup');
+    const detailedSetup = document.getElementById('detailedSetup');
+    
+    if(joined) {
+      if(initialSetup) initialSetup.style.display = 'none';
+      if(detailedSetup) detailedSetup.style.display = 'block';
+    } else {
+      if(initialSetup) initialSetup.style.display = 'block';
+      if(detailedSetup) detailedSetup.style.display = 'none';
+    }
+    
     if($.trackRow) $.trackRow.style.display = host ? '' : 'none';
     if($.ready) $.ready.style.display = joined ? '' : 'none';
-    const nh = document.getElementById('nameHorse');
-    if(nh) nh.style.display = joined ? '' : 'none';
     applyLockState();
     updateButtonsState();
     updateStartVisibility();
@@ -660,8 +703,29 @@
   }
 
   // --- Buttons ---
-  $.create.addEventListener('click', async ()=>{ await createLobby(); });
-  $.joinBtn.addEventListener('click', ()=>{ const name=$.pName.value.trim(); const hname=$.hName.value.trim(); if(!name||!hname){ alert('参加前に「プレイヤー名」と「馬の名前」を入力してください'); return; } const code=($.joinCode.value||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); if(code.length!==4){ alert('ロビーコードは4桁の数字です'); return; } joinLobby(code); });
+  $.create.addEventListener('click', async ()=>{ 
+    const name=$.pName.value.trim(); 
+    const hname=$.hName.value.trim(); 
+    if(!name||!hname){ 
+      alert('ロビー作成前に「プレイヤー名」と「馬の名前」を入力してください'); 
+      return; 
+    } 
+    await createLobby(); 
+  });
+  $.joinBtn.addEventListener('click', ()=>{ 
+    const name=$.pName.value.trim(); 
+    const hname=$.hName.value.trim(); 
+    if(!name||!hname){ 
+      alert('参加前に「プレイヤー名」と「馬の名前」を入力してください'); 
+      return; 
+    } 
+    const code=($.joinCode.value||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); 
+    if(code.length!==4){ 
+      alert('ロビーコードは4桁の数字です'); 
+      return; 
+    } 
+    joinLobby(code); 
+  });
   $.copy.addEventListener('click', ()=>{ if(!state.lobbyCode) return; navigator.clipboard.writeText(state.lobbyCode); $.copy.textContent='✅'; setTimeout(()=>$.copy.textContent='📋', 1200); });
   $.save.addEventListener('click', upsertMe);
   $.ready.addEventListener('click', ()=> setReady(!state.me.ready));

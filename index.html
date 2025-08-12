@@ -99,7 +99,7 @@
           <div class="pill"><span id="hostBadge">参加者</span></div>
         </div>
 
-        <div class="col" id="nameHorse">
+        <div class=\"col\" id=\"nameHorse\" style=\"display:none\">
           <div class="grid2">
             <div>
               <label>プレイヤー名</label>
@@ -164,10 +164,7 @@
           <div id="playersList" class="col"></div>
         </div>
 
-        <div class="card pad" style="margin-top:10px">
-          <h2>オンライン有効化（必須）</h2>
-          <div class="help">異なるデバイス & Wi‑Fi から参加するには、下記の <b>Firebase 設定</b> を埋めてください。未設定の場合は同一端末のデモ表示のみになります。</div>
-          <details>
+        <details>
             <summary>Firebase 設定を開く</summary>
 <pre class="code" id="cfgPreview"></pre>
           </details>
@@ -289,9 +286,11 @@
 
   function updateRoleUI(){
     const host = state.isHost;
+    const joined = !!state.lobbyCode && (!!(state.players && state.players[uid]) || state.isHost);
     if($.trackRow) $.trackRow.style.display = host ? '' : 'none';
-    // ロビー未参加なら「準備OK」を非表示
-    if($.ready) $.ready.style.display = (state.lobbyCode && state.players && state.players[uid]) ? '' : 'none';
+    if($.ready) $.ready.style.display = joined ? '' : 'none';
+    const nh = document.getElementById('nameHorse');
+    if(nh) nh.style.display = joined ? '' : 'none';
     applyLockState();
     updateButtonsState();
     updateStartVisibility();
@@ -383,6 +382,17 @@
 
   async function abandonRace(reason){ if(!state.net || !state.lobbyCode) return; await R(`lobbies/${state.lobbyCode}`).update({ started:false, abandoned:{ at:Date.now(), reason } }); await R(`lobbies/${state.lobbyCode}/state`).remove(); await R(`lobbies/${state.lobbyCode}/results`).remove(); }
 
+  async function abortToLobby(){
+    if(!(state.isHost && state.started)) return;
+    if(state.net && state.lobbyCode){
+      await R(`lobbies/${state.lobbyCode}`).update({ started:false, abandoned:null });
+      await R(`lobbies/${state.lobbyCode}/state`).remove();
+    }
+    state.started=false; state.abandoned=null; state.results=[]; state.lastState=null;
+    sim.reset(); drawRace();
+    applyLockState(); updateButtonsState(); updateStartVisibility();
+  }`).update({ started:false, abandoned:{ at:Date.now(), reason } }); await R(`lobbies/${state.lobbyCode}/state`).remove(); await R(`lobbies/${state.lobbyCode}/results`).remove(); }
+
   function subscribeLobby(code){ if(!state.net) return;
     R(`lobbies/${code}`).on('value', snap=>{
       const v=snap.val()||{};
@@ -434,7 +444,7 @@
   $.start.addEventListener('click', async ()=>{ if(!state.isHost) return; if(!everyoneReady()){ alert('全員の準備がまだ完了していません'); return; } if(!(state.players[uid]&&state.players[uid].ready)){ alert('ホストも「準備OK」を押してください'); return; } await upsertMe(); sim.start(); });
   $.leave.addEventListener('click', leaveLobby);
   $.reset.addEventListener('click', async ()=>{ if(!state.isHost||!state.net||!state.lobbyCode) return; await R(`lobbies/${state.lobbyCode}`).update({ started:false, abandoned:null, seed:0 }); await R(`lobbies/${state.lobbyCode}/state`).remove(); await R(`lobbies/${state.lobbyCode}/results`).remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtonsState(); applyLockState(); updateStartVisibility(); });
-  $.abort.addEventListener('click', async ()=>{ if(!(state.isHost && state.started)) return; await abandonRace('aborted_by_host'); state.started=false; updateButtonsState(); applyLockState(); });
+  $.abort.addEventListener('click', async ()=>{ await abortToLobby(); }); state.started=false; updateButtonsState(); applyLockState(); });
 
   // URLから自動参加
   (function autoJoin(){ const q=new URLSearchParams(location.search); const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); if(room){ joinLobby(room.padStart(4,'0')); } else { updateRoleUI(); } })();

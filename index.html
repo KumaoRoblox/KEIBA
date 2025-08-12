@@ -20,18 +20,22 @@
     header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); backdrop-filter: blur(6px);}    
     header h1{margin:0; font-size:18px; letter-spacing:.4px}
     header .tag{font-size:12px; color:var(--muted)}
-    main{display:grid; grid-template-columns:minmax(320px,680px) 1fr; gap:14px; padding:0 14px 14px}
+    main{display:grid; grid-template-columns:minmax(560px,680px) 1fr; gap:14px; padding:0 14px 14px}
+    
+    /* スマホ対応のレスポンシブ */
     @media (max-width:1024px){ 
-      main{grid-template-columns:1fr; padding:0 8px 8px}
+      main{grid-template-columns:1fr; padding:0 8px 8px} 
     }
     @media (max-width:768px){
+      header{padding:8px 12px; font-size:14px}
+      header h1{font-size:16px}
       main{padding:0 4px 4px; gap:8px}
-      header{padding:8px 12px}
       .pad{padding:12px}
       .grid2{grid-template-columns:1fr; gap:8px}
       .grid3{grid-template-columns:1fr 1fr; gap:8px}
-      .slider{grid-template-columns:80px 1fr 60px; gap:8px}
+      .slider{grid-template-columns:100px 1fr 80px; gap:8px}
       .row{flex-wrap:wrap; gap:6px}
+      .pill{padding:4px 8px; font-size:12px}
     }
     @media (min-width:1600px){ main{ grid-template-columns:minmax(680px,760px) 1fr } }
 
@@ -66,13 +70,20 @@
     .copy{cursor:pointer}
     .badge{font-size:12px; padding:2px 8px; border-radius:999px; background:#0c1020; border:1px solid var(--border)}
 
-    #canvasWrap{height:400px; position:relative}
+    /* キャンバスをレスポンシブ対応 */
+    #canvasWrap{height:520px; position:relative}
     @media (max-width:768px){
-      #canvasWrap{height:300px}
+      #canvasWrap{height:350px}
     }
-    canvas{width:100%; height:100%; background:repeating-linear-gradient(90deg, #111430, #111430 14px, #121535 14px, #121535 28px); display:block}    
+    @media (max-width:480px){
+      #canvasWrap{height:280px}
+    }
+    canvas{width:100%; height:100%; background:repeating-linear-gradient(90deg, #111430, #111430 14px, #121535 14px, #121535 28px)}    
     #overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none}
     #overlay .big{font-size:72px; font-weight:700; text-shadow:0 10px 30px rgba(0,0,0,.4)}
+    @media (max-width:768px){
+      #overlay .big{font-size:48px}
+    }
     #results{position:absolute; right:16px; top:16px; background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:12px; padding:10px; max-width:300px}
 
     .slider{display:grid; grid-template-columns:120px minmax(280px,420px) 90px; gap:12px; align-items:center; min-height:44px}
@@ -447,6 +458,7 @@
 
   function getPos(id){ if(state.isHost){ return sim.horses[id]&&sim.horses[id].x||0; } const st=state.lastState; if(!st||!st.pos) return 0; return st.pos[id]||0; }
 
+  // 元のdrawRace関数をスマホ対応に調整
   function drawRace(){ 
     const ctx=state.ctx; 
     if(!ctx) return; 
@@ -463,60 +475,65 @@
       return; 
     } 
     
-    // シンプルな固定レイアウト
-    const laneCount = lanes.length;
-    const totalHeight = c.height - 60*dpr; // 上下のマージン
-    const laneHeight = Math.max(40*dpr, totalHeight / laneCount);
-    
-    const pad = 30*dpr; 
-    const left = 100*dpr;
-    const right = c.width - 20*dpr;
-    const trackWidth = right - left; 
+    // スマホ対応：画面サイズに応じた調整
+    const isSmall = c.width < 600*dpr;
+    const H = Math.max(40*dpr, Math.min(120*dpr, (c.height/lanes.length) - 10*dpr)); 
+    const pad = isSmall ? 20*dpr : 30*dpr; 
+    const left = isSmall ? 80*dpr : 120*dpr;
+    const right = c.width - (isSmall ? 15*dpr : 20*dpr);
+    const w = right - left; 
     
     // ゴールライン
     ctx.strokeStyle='rgba(255,255,255,.3)'; 
     ctx.lineWidth=2*dpr; 
     ctx.setLineDash([8*dpr,8*dpr]); 
     ctx.beginPath(); 
-    ctx.moveTo(right, pad); 
-    ctx.lineTo(right, c.height-pad); 
+    ctx.moveTo(left+w,pad); 
+    ctx.lineTo(left+w,c.height-pad); 
     ctx.stroke(); 
     ctx.setLineDash([]); 
     
     // 距離表示
-    ctx.font=`${12*dpr}px ui-monospace, monospace`; 
+    ctx.font=`${(isSmall ? 11 : 14)*dpr}px ui-monospace, monospace`; 
     ctx.fillStyle='rgba(255,255,255,.6)'; 
-    ctx.fillText(`${L}m`, right-30*dpr, pad-8*dpr); 
+    ctx.fillText(`${L} m`, left+w-30*dpr, pad-6*dpr); 
     
     // 各レーン
     lanes.forEach((ln,i)=>{ 
-      const y = pad + i * laneHeight;
+      const y = pad + i * (H + (isSmall ? 4 : 8)*dpr) + (isSmall ? 5 : 10)*dpr;
       
       // レーン背景
       ctx.fillStyle='rgba(255,255,255,.03)'; 
-      ctx.fillRect(left-5*dpr, y, trackWidth+10*dpr, laneHeight-4*dpr); 
+      ctx.fillRect(left-10*dpr, y, w+20*dpr, H); 
       
       const pos = getPos(ln.id); 
-      const progress = Math.max(0, Math.min(1, pos/L));
-      const horseX = left + trackWidth * progress; 
+      const x = left + w * Math.max(0, Math.min(1, pos/L)); 
       const p = state.players[ln.id]; 
       const col = (state.lastState&&state.lastState.colors&&state.lastState.colors[ln.id])||(p&&p.horse&&p.horse.color)||ln.color||'#7dd3fc'; 
       
-      // 馬（固定サイズ）
-      const horseSize = 16*dpr;
+      // 馬
+      const horseWidth = isSmall ? 24*dpr : 60*dpr;
+      const horseHeight = H * 0.6;
       ctx.fillStyle = col; 
-      ctx.fillRect(horseX - horseSize/2, y + laneHeight/2 - horseSize/2, horseSize, horseSize); 
+      if(ctx.roundRect){ 
+        ctx.roundRect(x - horseWidth/2, y + H*0.2, horseWidth, horseHeight, (isSmall ? 6 : 10)*dpr); 
+        ctx.fill(); 
+      } else { 
+        ctx.fillRect(x - horseWidth/2, y + H*0.2, horseWidth, horseHeight); 
+      } 
       
       // プレイヤー名
       ctx.fillStyle='rgba(255,255,255,.9)'; 
-      ctx.font=`${11*dpr}px system-ui`; 
-      const name = (p&&p.name)||'??';
-      ctx.fillText(name, 8*dpr, y + laneHeight/2 + 4*dpr); 
+      ctx.font=`${(isSmall ? 11 : 16)*dpr}px system-ui`; 
+      const label = isSmall ? 
+        `${(p&&p.name)||'??'}` : 
+        `${(p&&p.name)||'??'} / ${(p&&p.horse&&p.horse.name)||'馬'}`; 
+      ctx.fillText(label, (isSmall ? 4 : 14)*dpr, y + H*0.55); 
       
       // 距離表示
       ctx.fillStyle='rgba(255,255,255,.6)'; 
-      ctx.font=`${10*dpr}px ui-monospace, monospace`; 
-      ctx.fillText(`${Math.round(pos)}m`, horseX + horseSize/2 + 4*dpr, y + laneHeight/2 + 3*dpr); 
+      ctx.font=`${(isSmall ? 9 : 12)*dpr}px ui-monospace, monospace`; 
+      ctx.fillText(`${Math.round(pos)}m`, x - (isSmall ? 12 : 18)*dpr, y + H*0.95); 
     }); 
   }
 

@@ -49,50 +49,44 @@
       position: relative;
     }
     
-    /* レース中のコントロールパネル - 下部に配置 */
+    /* レース中のコントロールパネル - 右下に配置 */
     #raceControls {
       position: absolute;
       bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
+      right: 10px;
       background: rgba(0,0,0,0.8);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 8px;
       display: none;
-      flex-direction: row;
-      gap: 8px;
+      flex-direction: column;
+      gap: 6px;
       z-index: 100;
       backdrop-filter: blur(10px);
+      max-width: 150px;
     }
     #raceControls.show {
       display: flex;
     }
     #raceControls button {
-      padding: 8px 12px;
-      font-size: 12px;
-      min-width: 90px;
+      padding: 6px 10px;
+      font-size: 11px;
+      min-width: 120px;
       white-space: nowrap;
     }
     
     @media (max-width: 768px) {
-      main.racing {
-        height: 100vh;
-      }
-      main.racing #canvasWrap {
-        height: calc(100vh - 60px);
-      }
       #raceControls {
         bottom: 5px;
+        right: 5px;
         padding: 6px;
         gap: 4px;
-        flex-direction: column;
-        min-width: 140px;
+        max-width: 130px;
       }
       #raceControls button {
-        padding: 6px 8px;
-        font-size: 11px;
-        min-width: 130px;
+        padding: 5px 8px;
+        font-size: 10px;
+        min-width: 110px;
       }
     }
     @media (max-width:1024px){ 
@@ -465,7 +459,8 @@
     lanes:[], lastState:null, trackLen:1200,
     racePlayerIds:[],
     abandoned:null,
-    emptyLobbyTimeout:null // 空ロビー削除用タイマー
+    emptyLobbyTimeout:null, // 空ロビー削除用タイマー
+    moodUpdatedForAbandoned:false // 中断時の気分更新フラグ
   };
 
   const $ = {
@@ -683,8 +678,7 @@
   function updateStartVisibility(){ const show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
   function updateReadyButton(){ $.ready.textContent=state.me.ready? '準備解除':'準備OK'; $.ready.className=state.me.ready? 'secondary':'success'; }
 
-  function collectHorse(){ 
-    // 馬の気分をランダムで決定
+  function generateRandomMood() {
     const moods = [
       { name: '絶好調', emoji: '😤', multiplier: 1.2, color: '#ff6b6b' },
       { name: '好調', emoji: '😊', multiplier: 1.1, color: '#4ecdc4' },
@@ -692,7 +686,17 @@
       { name: '不調', emoji: '😔', multiplier: 0.9, color: '#f39c12' },
       { name: '絶不調', emoji: '😩', multiplier: 0.8, color: '#9b59b6' }
     ];
-    const randomMood = moods[Math.floor(Math.random() * moods.length)];
+    return moods[Math.floor(Math.random() * moods.length)];
+  }
+
+  function collectHorse(newMood = false){ 
+    // 新しい気分が必要な場合、または既存の気分がない場合のみ生成
+    let mood;
+    if(newMood || !state.me.horse?.mood) {
+      mood = generateRandomMood();
+    } else {
+      mood = state.me.horse.mood; // 既存の気分を保持
+    }
     
     // ポイントを実際の能力値に変換
     const topSpeedBase = 5 + (+$.sTop.value) * 0.3; // 5-35 m/s
@@ -707,7 +711,7 @@
       accel: +(accelBase).toFixed(2), 
       stamina: +(staminaBase).toFixed(0), 
       luck: +(luckBase).toFixed(2),
-      mood: randomMood,
+      mood: mood,
       // ポイント値も保存
       points: {
         speed: +$.sTop.value,
@@ -733,10 +737,10 @@
     }catch(e){ console.warn('presence onDisconnect set failed', e); }
   }
 
-  async function upsertMe(){
+  async function upsertMe(newMood = false){
     if(state.started){ ensurePresence(); return; }
     const name=$.pName.value.trim()||`Player-${uid.slice(0,4).toUpperCase()}`;
-    let horse=collectHorse();
+    let horse=collectHorse(newMood); // 新しい気分フラグを渡す
     horse.color=uniqueColor(horse.color,true);
     $.hColor.value=horse.color; $.colorBox.style.background=horse.color;
     state.me.name=name; state.me.horse=horse; $.who.textContent=name;
@@ -771,12 +775,27 @@
     
     $.code.textContent=code; 
     history.replaceState(null,'', location.pathname+`?room=${code}`);
-    await upsertMe(); 
+    await upsertMe(true); // 新しい気分を生成
     ensurePresence(); 
     updateRoleUI();
   }
 
-  async function joinLobby(code){ state.lobbyCode=code; state.isHost=false; updateHeader(); if(state.net){ subscribeLobby(code); ensurePresence(); await sleep(50); await upsertMe(); } $.code.textContent=code; history.replaceState(null,'', location.pathname+`?room=${code}`); updateRoleUI(); }
+  async function joinLobby(code){ 
+    state.lobbyCode=code; 
+    state.isHost=false; 
+    updateHeader(); 
+    
+    if(state.net){ 
+      subscribeLobby(code); 
+      ensurePresence(); 
+      await sleep(50); 
+      await upsertMe(true); // 新しい気分を生成
+    } 
+    
+    $.code.textContent=code; 
+    history.replaceState(null,'', location.pathname+`?room=${code}`); 
+    updateRoleUI(); 
+  }
 
   async function abandonRace(reason){ if(!state.net || !state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:{ at:Date.now(), reason } }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); }
 
@@ -802,9 +821,10 @@
       }
     }
     
-    // 自分の準備状態もリセット
+    // 自分の準備状態もリセット & 新しい気分を生成
     state.me.ready = false;
     updateReadyButton();
+    await upsertMe(true); // 新しい気分を生成
     
     sim.reset(); 
     if(state.ctx) drawRace();

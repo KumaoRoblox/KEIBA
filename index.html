@@ -20,9 +20,9 @@
     header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); backdrop-filter: blur(6px);}    
     header h1{margin:0; font-size:18px; letter-spacing:.4px}
     header .tag{font-size:12px; color:var(--muted)}
-    main{display:grid; grid-template-columns:minmax(520px,640px) 1fr; gap:14px; padding:0 14px 14px}
+    main{display:grid; grid-template-columns:minmax(720px,880px) 1fr; gap:14px; padding:0 14px 14px}
     @media (max-width:1024px){ main{grid-template-columns:1fr} }
-    @media (min-width:1600px){ main{ grid-template-columns:minmax(640px,720px) 1fr } }
+    @media (min-width:1600px){ main{ grid-template-columns:minmax(880px,960px) 1fr } }
 
     .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00)); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
     .card h2{font-size:15px; margin:0 0 10px 0; letter-spacing:.3px; color:#dfe2ff}
@@ -60,13 +60,13 @@
     #overlay .big{font-size:72px; font-weight:700; text-shadow:0 10px 30px rgba(0,0,0,.4)}
     #results{position:absolute; right:16px; top:16px; background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:12px; padding:10px; max-width:300px}
 
-    .slider{display:grid; grid-template-columns:120px 1fr 90px; gap:12px; align-items:center; min-height:48px}
-    input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:16px; background:transparent; cursor:pointer}
-    input[type=range]::-webkit-slider-runnable-track{height:16px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
-    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:28px; height:28px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); margin-top:-6px; box-shadow:0 2px 8px rgba(0,0,0,.35)}
+    .slider{display:grid; grid-template-columns:120px minmax(520px,1fr) 90px; gap:12px; align-items:center; min-height:44px}
+    input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:12px; background:transparent; cursor:pointer}
+    input[type=range]::-webkit-slider-runnable-track{height:10px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); margin-top:-4px; box-shadow:0 2px 8px rgba(0,0,0,.35)}
     input[type=range]:disabled::-webkit-slider-thumb{background:#9aa0c7; border-color:#9aa0c7}
-    input[type=range]::-moz-range-track{height:16px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
-    input[type=range]::-moz-range-thumb{width:28px; height:28px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); box-shadow:0 2px 8px rgba(0,0,0,.35)}
+    input[type=range]::-moz-range-track{height:10px; background:linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)); border:1px solid var(--border); border-radius:999px}
+    input[type=range]::-moz-range-thumb{width:18px; height:18px; border-radius:50%; background:#e6e7ff; border:2px solid rgba(108,204,255,.8); box-shadow:0 2px 8px rgba(0,0,0,.35)}
     input[type=range]:disabled::-moz-range-thumb{background:#9aa0c7; border-color:#9aa0c7}
 
     .help{font-size:12px; color:var(--muted)}

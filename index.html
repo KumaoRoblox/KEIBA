@@ -27,15 +27,39 @@
       main{grid-template-columns:1fr; padding:0 8px 8px} 
     }
     @media (max-width:768px){
-      header{padding:8px 12px; font-size:14px}
-      header h1{font-size:16px}
-      main{padding:0 4px 4px; gap:8px}
-      .pad{padding:12px}
-      .grid2{grid-template-columns:1fr; gap:8px}
-      .grid3{grid-template-columns:1fr 1fr; gap:8px}
-      .slider{grid-template-columns:100px 1fr 80px; gap:8px}
-      .row{flex-wrap:wrap; gap:6px}
-      .pill{padding:4px 8px; font-size:12px}
+      header{padding:6px 8px; font-size:12px}
+      header h1{font-size:14px}
+      header .tag{font-size:10px}
+      main{padding:0 2px 2px; gap:4px}
+      .pad{padding:8px}
+      .grid2{grid-template-columns:1fr; gap:4px}
+      .grid3{grid-template-columns:1fr; gap:4px}
+      .slider{
+        grid-template-columns:1fr; 
+        gap:4px; 
+        text-align:center;
+        min-height:auto;
+      }
+      .slider > div:first-child{
+        font-size:12px; 
+        font-weight:500;
+      }
+      .slider > div:last-child{
+        font-size:11px;
+      }
+      .row{flex-wrap:wrap; gap:4px; font-size:12px}
+      .pill{padding:3px 6px; font-size:10px}
+      .badge{font-size:10px; padding:1px 4px}
+      .help{font-size:10px}
+      input[type="text"], input[type="number"], button{
+        padding:6px 8px; 
+        font-size:12px;
+        border-radius:8px;
+      }
+      .card h2{font-size:13px; margin:0 0 6px 0}
+      .muted{font-size:11px}
+      button{padding:8px 10px}
+      .footerNote{font-size:10px; padding:0 8px 8px}
     }
     @media (min-width:1600px){ main{ grid-template-columns:minmax(680px,760px) 1fr } }
 
@@ -78,17 +102,16 @@
     }
     @media (max-width:768px){
       #canvasWrap{
-        height:300px;
-        /* アスペクト比16:9を維持 */
-        aspect-ratio: 16/9;
+        height:200px;
+        aspect-ratio: 2/1;
         max-width:100%;
         width:100%;
       }
     }
     @media (max-width:480px){
       #canvasWrap{
-        height:250px;
-        aspect-ratio: 16/9;
+        height:180px;
+        aspect-ratio: 2/1;
       }
     }
     canvas{
@@ -478,20 +501,17 @@
     const wrap=document.getElementById('canvasWrap'); 
     const dpr=state.dpr; 
     
-    // アスペクト比を維持してキャンバスサイズを設定
+    // 楕円トラック用に2:1のアスペクト比を維持
     const containerWidth = wrap.clientWidth;
     const containerHeight = wrap.clientHeight;
     
-    // 16:9のアスペクト比を基準に調整
-    const aspectRatio = 16/9;
+    const aspectRatio = 2/1; // 楕円に適した比率
     let canvasWidth, canvasHeight;
     
     if(containerWidth / containerHeight > aspectRatio) {
-      // 高さ基準でサイズ決定
       canvasHeight = containerHeight;
       canvasWidth = canvasHeight * aspectRatio;
     } else {
-      // 幅基準でサイズ決定
       canvasWidth = containerWidth;
       canvasHeight = canvasWidth / aspectRatio;
     }
@@ -508,7 +528,7 @@
 
   function getPos(id){ if(state.isHost){ return sim.horses[id]&&sim.horses[id].x||0; } const st=state.lastState; if(!st||!st.pos) return 0; return st.pos[id]||0; }
 
-  // 馬のアスペクト比を固定したdrawRace関数
+  // 楕円コースでのレース描画
   function drawRace(){ 
     const ctx=state.ctx; 
     if(!ctx) return; 
@@ -520,72 +540,123 @@
     
     if(!lanes.length){ 
       ctx.fillStyle='rgba(255,255,255,.08)'; 
-      ctx.font=`${18*dpr}px system-ui`; 
-      ctx.fillText('ロビーに参加して馬を登録してください',20*dpr,40*dpr); 
+      ctx.font=`${16*dpr}px system-ui`; 
+      const text = 'ロビーに参加して馬を登録';
+      const textWidth = ctx.measureText(text).width;
+      ctx.fillText(text, (c.width - textWidth)/2, c.height/2); 
       return; 
     } 
     
-    // 固定比率でレイアウト計算
-    const canvasRealWidth = c.width / dpr;
-    const canvasRealHeight = c.height / dpr;
-    const isSmall = canvasRealWidth < 600;
+    // 楕円コースの設定
+    const centerX = c.width / 2;
+    const centerY = c.height / 2;
+    const trackWidth = c.width * 0.8;
+    const trackHeight = c.height * 0.7;
+    const radiusX = trackWidth / 2;
+    const radiusY = trackHeight / 2;
     
-    const H = Math.max(30*dpr, Math.min(80*dpr, (c.height/lanes.length) - 8*dpr)); 
-    const pad = isSmall ? 15*dpr : 25*dpr; 
-    const left = isSmall ? 60*dpr : 100*dpr;
-    const right = c.width - (isSmall ? 10*dpr : 15*dpr);
-    const w = right - left; 
+    const laneCount = lanes.length;
+    const laneSpacing = Math.min(15*dpr, radiusY * 0.15);
     
-    // ゴールライン
-    ctx.strokeStyle='rgba(255,255,255,.3)'; 
-    ctx.lineWidth=2*dpr; 
-    ctx.setLineDash([6*dpr,6*dpr]); 
-    ctx.beginPath(); 
-    ctx.moveTo(left+w,pad); 
-    ctx.lineTo(left+w,c.height-pad); 
-    ctx.stroke(); 
-    ctx.setLineDash([]); 
+    // コースの外枠と内枠を描画
+    for(let i = 0; i <= laneCount; i++) {
+      const currentRadiusX = radiusX - i * laneSpacing;
+      const currentRadiusY = radiusY - i * laneSpacing;
+      
+      if(currentRadiusX > 0 && currentRadiusY > 0) {
+        ctx.strokeStyle = i === 0 ? 'rgba(108,255,128,.4)' : 'rgba(255,255,255,.15)';
+        ctx.lineWidth = i === 0 ? 3*dpr : 1*dpr;
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY, currentRadiusX, currentRadiusY, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+    
+    // スタート/ゴールライン
+    ctx.strokeStyle = 'rgba(255,255,255,.6)';
+    ctx.lineWidth = 2*dpr;
+    ctx.setLineDash([6*dpr, 6*dpr]);
+    ctx.beginPath();
+    ctx.moveTo(centerX + radiusX, centerY - radiusY);
+    ctx.lineTo(centerX + radiusX - laneCount * laneSpacing, centerY - radiusY + laneCount * laneSpacing);
+    ctx.stroke();
+    ctx.setLineDash([]);
     
     // 距離表示
-    ctx.font=`${(isSmall ? 10 : 12)*dpr}px ui-monospace, monospace`; 
-    ctx.fillStyle='rgba(255,255,255,.6)'; 
-    ctx.fillText(`${L}m`, left+w-25*dpr, pad-4*dpr); 
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    ctx.font = `${12*dpr}px ui-monospace, monospace`;
+    ctx.fillText(`${L}m`, centerX + radiusX - 30*dpr, centerY - radiusY - 8*dpr);
     
-    // 各レーン
-    lanes.forEach((ln,i)=>{ 
-      const y = pad + i * (H + 6*dpr) + 8*dpr;
+    // 各馬の描画
+    lanes.forEach((ln, i) => {
+      const laneRadiusX = radiusX - (i + 0.5) * laneSpacing;
+      const laneRadiusY = radiusY - (i + 0.5) * laneSpacing;
       
-      // レーン背景
-      ctx.fillStyle='rgba(255,255,255,.03)'; 
-      ctx.fillRect(left-8*dpr, y, w+16*dpr, H); 
+      if(laneRadiusX <= 0 || laneRadiusY <= 0) return;
       
-      const pos = getPos(ln.id); 
-      const progress = Math.max(0, Math.min(1, pos/L));
-      const x = left + w * progress; 
-      const p = state.players[ln.id]; 
-      const col = (state.lastState&&state.lastState.colors&&state.lastState.colors[ln.id])||(p&&p.horse&&p.horse.color)||ln.color||'#7dd3fc'; 
+      const pos = getPos(ln.id);
+      const progress = Math.max(0, Math.min(1, pos / L));
       
-      // 馬を正方形で描画（アスペクト比固定）
-      const horseSize = Math.min(H * 0.6, 24*dpr); // 正方形サイズ
-      ctx.fillStyle = col; 
-      if(ctx.roundRect){ 
-        ctx.roundRect(x - horseSize/2, y + (H - horseSize)/2, horseSize, horseSize, 4*dpr); 
-        ctx.fill(); 
-      } else { 
-        ctx.fillRect(x - horseSize/2, y + (H - horseSize)/2, horseSize, horseSize); 
-      } 
+      // 楕円上の位置計算（右上から時計回り）
+      const angle = progress * 2 * Math.PI;
+      const x = centerX + laneRadiusX * Math.cos(angle);
+      const y = centerY + laneRadiusY * Math.sin(angle);
       
-      // プレイヤー名
-      ctx.fillStyle='rgba(255,255,255,.9)'; 
-      ctx.font=`${(isSmall ? 9 : 12)*dpr}px system-ui`; 
-      const name = (p&&p.name)||'??';
-      ctx.fillText(name, 4*dpr, y + H/2 + 3*dpr); 
+      const p = state.players[ln.id];
+      const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';
       
-      // 距離表示
-      ctx.fillStyle='rgba(255,255,255,.6)'; 
-      ctx.font=`${(isSmall ? 8 : 10)*dpr}px ui-monospace, monospace`; 
-      ctx.fillText(`${Math.round(pos)}m`, x + horseSize/2 + 4*dpr, y + H/2 + 3*dpr); 
-    }); 
+      // 馬を円形で描画
+      const horseSize = Math.min(12*dpr, laneSpacing * 0.8);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(x, y, horseSize/2, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // 馬の輪郭
+      ctx.strokeStyle = 'rgba(255,255,255,.8)';
+      ctx.lineWidth = 1*dpr;
+      ctx.stroke();
+      
+      // プレイヤー名をコース内側に表示
+      const isSmall = c.width < 400*dpr;
+      if(!isSmall && p?.name) {
+        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        ctx.font = `${9*dpr}px system-ui`;
+        const nameWidth = ctx.measureText(p.name).width;
+        
+        // 内側に向かって名前を配置
+        const innerX = centerX + (laneRadiusX - laneSpacing) * Math.cos(angle);
+        const innerY = centerY + (laneRadiusY - laneSpacing) * Math.sin(angle);
+        ctx.fillText(p.name, innerX - nameWidth/2, innerY + 3*dpr);
+      }
+      
+      // 距離表示（小さく）
+      if(!isSmall) {
+        ctx.fillStyle = 'rgba(255,255,255,.6)';
+        ctx.font = `${7*dpr}px ui-monospace, monospace`;
+        const distText = `${Math.round(pos)}m`;
+        const distWidth = ctx.measureText(distText).width;
+        ctx.fillText(distText, x - distWidth/2, y - horseSize/2 - 4*dpr);
+      }
+    });
+    
+    // レジェンド（スマホでは省略）
+    if(c.width >= 400*dpr) {
+      ctx.fillStyle = 'rgba(0,0,0,.3)';
+      ctx.fillRect(10*dpr, 10*dpr, 120*dpr, lanes.length * 16*dpr + 20*dpr);
+      
+      lanes.forEach((ln, i) => {
+        const p = state.players[ln.id];
+        const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';
+        
+        ctx.fillStyle = col;
+        ctx.fillRect(15*dpr, 20*dpr + i * 16*dpr, 12*dpr, 12*dpr);
+        
+        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        ctx.font = `${10*dpr}px system-ui`;
+        ctx.fillText((p?.name || '??'), 32*dpr, 30*dpr + i * 16*dpr);
+      });
+    }
   }
 
   // --- Buttons ---

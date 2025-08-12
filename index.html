@@ -5,48 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>みんなで競馬 - ロビー&オンライン対戦</title>
   <style>
-    :root{
-      --bg:#0f1221; --panel:#171a2e; --text:#e6e7ff; --muted:#9aa0c7; --accent:#6cf; --accent2:#9f6cff; --ok:#6cff80; --warn:#ffd166; --bad:#ff6c9f;
-      --border:rgba(255,255,255,.08);
-    }
+    :root{ --bg:#0f1221; --panel:#171a2e; --text:#e6e7ff; --muted:#9aa0c7; --accent:#6cf; --ok:#6cff80; --warn:#ffd166; --bad:#ff6c9f; --border:rgba(255,255,255,.08); }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0; background:radial-gradient(1500px 800px at 20% -10%, rgba(159,108,255,.12), transparent 60%),
-      radial-gradient(1200px 900px at 110% 20%, rgba(108,204,255,.10), transparent 60%), var(--bg);
-      color:var(--text); font:15px/1.6 system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
-      display:grid; grid-template-rows:auto 1fr; gap:14px;
-    }
-    header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border);}
-    header h1{margin:0; font-size:18px; letter-spacing:.4px}
+    body{ margin:0; background:radial-gradient(1500px 800px at 20% -10%, rgba(159,108,255,.12), transparent 60%), radial-gradient(1200px 900px at 110% 20%, rgba(108,204,255,.10), transparent 60%), var(--bg); color:var(--text); font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif; display:grid; grid-template-rows:auto 1fr; gap:14px; }
+    header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border)}
+    header h1{margin:0; font-size:18px}
     header .tag{font-size:12px; color:var(--muted)}
 
     main{display:grid; grid-template-columns:minmax(560px,680px) 1fr; gap:14px; padding:0 14px 14px}
     @media (max-width:1024px){ main{grid-template-columns:1fr} }
 
     .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00)); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
-    .card h2{font-size:15px; margin:0 0 10px 0; letter-spacing:.3px; color:#dfe2ff}
+    .card h2{font-size:15px; margin:0 0 10px 0; color:#dfe2ff}
     .pad{padding:16px}
     .row{display:flex; gap:10px; align-items:center}
     .col{display:flex; flex-direction:column; gap:10px}
     .muted{color:var(--muted)}
-    .code{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-
-    input, select, button{font:inherit; color:inherit}
-    input[type="text"], input[type="number"], .readonly{
-      width:100%; background:#0e1121; border:1px solid var(--border); border-radius:12px; padding:10px 12px;
-      outline:none; transition:.2s border-color, .2s box-shadow;
-    }
-    input[type="text"]:focus, input[type="number"]:focus{border-color:#6cf; box-shadow:0 0 0 3px rgba(108,204,255,.15)}
-    .readonly{opacity:.8}
-    button{ background:linear-gradient(180deg, rgba(108,204,255,.25), rgba(108,204,255,.12)); border:1px solid rgba(108,204,255,.45); color:#e8f6ff; padding:10px 14px; border-radius:12px; cursor:pointer; transition:.15s transform ease, .2s filter; }
-    button:hover{filter:brightness(1.05)}
-    button:active{transform:translateY(1px)}
-    button.secondary{background:transparent; border:1px solid var(--border)}
-    .success{background:linear-gradient(180deg, rgba(108,255,128,.2), rgba(108,255,128,.12)); border:1px solid rgba(108,255,128,.45)}
-
-    .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
-    .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+    .badge{font-size:12px; padding:2px 8px; border-radius:999px; background:#0c1020; border:1px solid var(--border)}
 
     #canvasWrap{height:520px; position:relative}
     canvas{width:100%; height:100%; background:repeating-linear-gradient(90deg, #111430, #111430 14px, #121535 14px, #121535 28px)}
@@ -70,7 +46,6 @@
   </header>
 
   <main>
-    <!-- 左：ロビー/設定 -->
     <section class="card pad" id="left">
       <h2>ロビー</h2>
       <div class="col" id="lobbySection">
@@ -82,9 +57,9 @@
           </div>
         </div>
         <div class="row">
-          <div class="pill">共有コード: <span id="lobbyCode" class="code">-</span> <span id="copyCode" class="copy">📋</span></div>
-          <div class="pill">あなた: <span id="whoami">未接続</span></div>
-          <div class="pill"><span id="hostBadge">参加者</span></div>
+          <div class="badge">共有コード: <span id="lobbyCode" class="code">-</span> <span id="copyCode" style="cursor:pointer">📋</span></div>
+          <div class="badge">あなた: <span id="whoami">未接続</span></div>
+          <div class="badge"><span id="hostBadge">参加者</span></div>
         </div>
 
         <div class="col" id="nameHorse" style="display:none">
@@ -125,9 +100,8 @@
             <div class="slider">
               <div>色</div>
               <input type="color" id="horseColor" value="#7dd3fc" />
-              <div><span class="colorBox" id="colorBox" style="display:inline-block;width:36px;height:24px;border-radius:6px;border:1px solid var(--border)"></span></div>
+              <div><span id="colorBox" style="display:inline-block;width:36px;height:24px;border-radius:6px;border:1px solid var(--border)"></span></div>
             </div>
-            <!-- 距離はホストのみ表示 -->
             <div class="slider" id="trackRow" style="display:none">
               <div>距離</div>
               <input type="range" id="trackLen" min="200" max="5000" step="10" value="1200">
@@ -149,7 +123,6 @@
       </div>
     </section>
 
-    <!-- 右：レース画面 -->
     <section class="card pad" id="right">
       <h2>レース</h2>
       <div id="canvasWrap" class="card">
@@ -162,182 +135,72 @@
         <button id="resetBtn" class="secondary">レースをリセット（ホスト）</button>
         <button id="abortBtn" class="danger" style="display:none">試合を中断（ホスト）</button>
       </div>
-      <div class="help" style="margin-top:8px">レースはホスト端末で計算し、他端末へ配信します。</div>
+      <div class="muted" style="margin-top:8px">レースはホスト端末で計算し、他端末へ配信します。</div>
     </section>
   </main>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <script>
-  // ====== Firebase 設定（あなたのプロジェクトの値に差し替え可） ======
-  const firebaseConfig = {
-    apiKey: "AIzaSyBOqe--KczRP2fFCykd4iH1iaAVpyQTlSE",
-    authDomain: "keiba-66344.firebaseapp.com",
-    databaseURL: "https://keiba-66344-default-rtdb.firebaseio.com",
-    projectId: "keiba-66344",
-    storageBucket: "keiba-66344.firebasestorage.app",
-    messagingSenderId: "636995719079",
-    appId: "1:636995719079:web:dbb09c8860101a4c82b082",
-    measurementId: "G-QSPM8PBTTH"
-  };
+  var firebaseConfig={ apiKey:"AIzaSyBOqe--KczRP2fFCykd4iH1iaAVpyQTlSE", authDomain:"keiba-66344.firebaseapp.com", databaseURL:"https://keiba-66344-default-rtdb.firebaseio.com", projectId:"keiba-66344", storageBucket:"keiba-66344.firebasestorage.app", messagingSenderId:"636995719079", appId:"1:636995719079:web:dbb09c8860101a4c82b082", measurementId:"G-QSPM8PBTTH" };
 
-  // ====== ユーティリティ ======
-  const el = function(id){ return document.getElementById(id); };
-  const uid = (function(){
-    var ex = localStorage.getItem('uid');
-    if(ex) return ex;
-    var v = crypto.getRandomValues(new Uint32Array(4));
-    var s = Array.from(v).map(function(x){return x.toString(16).padStart(8,'0');}).join('');
-    localStorage.setItem('uid', s); return s;
-  })();
+  function el(id){ return document.getElementById(id); }
+  var uid=(function(){ var ex=localStorage.getItem('uid'); if(ex) return ex; var v=crypto.getRandomValues(new Uint32Array(4)); var s=Array.from(v).map(function(x){return x.toString(16).padStart(8,'0');}).join(''); localStorage.setItem('uid',s); return s; })();
 
-  var state = {
-    net:false, app:null, db:null,
-    me:{ id:uid, name:"", horse:null, ready:false },
-    lobby:null, lobbyCode:null, isHost:false, players:{},
-    started:false, seed:null, results:[],
-    ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
-    lanes:[], lastState:null, trackLen:1200,
-    racePlayerIds:[], abandoned:null
-  };
+  var state={ net:false, app:null, db:null, me:{ id:uid, name:"", horse:null, ready:false }, lobby:null, lobbyCode:null, isHost:false, players:{}, started:false, seed:null, results:[], ctx:null, canvas:null, dpr:Math.min(2,window.devicePixelRatio||1), lanes:[], lastState:null, trackLen:1200, racePlayerIds:[], abandoned:null };
 
-  var $ = {
-    code: el('lobbyCode'), who: el('whoami'), hostBadge: el('hostBadge'), onlineBadge: el('onlineBadge'),
-    create: el('createLobbyBtn'), joinBtn: el('joinLobbyBtn'), joinCode: el('joinCode'), copy: el('copyCode'),
-    pName: el('playerName'), hName: el('horseName'),
-    sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'),
-    vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'),
-    save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'),
-    trackLen: el('trackLen'), trackRow: el('trackRow'), vLen: el('vLen'),
-    canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
-    leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn')
-  };
+  var $={ code:el('lobbyCode'), who:el('whoami'), hostBadge:el('hostBadge'), create:el('createLobbyBtn'), joinBtn:el('joinLobbyBtn'), joinCode:el('joinCode'), copy:el('copyCode'), pName:el('playerName'), hName:el('horseName'), sTop:el('sTop'), sAcc:el('sAcc'), sSta:el('sSta'), sLuck:el('sLuck'), hColor:el('horseColor'), vTop:el('vTop'), vAcc:el('vAcc'), vSta:el('vSta'), vLuck:el('vLuck'), colorBox:el('colorBox'), save:el('saveHorseBtn'), ready:el('readyBtn'), start:el('startBtn'), playersList:el('playersList'), trackLen:el('trackLen'), trackRow:el('trackRow'), vLen:el('vLen'), canvas:el('race'), overlay:el('overlay'), count:el('countDown'), results:el('results'), leave:el('leaveBtn'), reset:el('resetBtn'), abort:el('abortBtn') };
 
-  function syncLabels(){
-    $.vTop.textContent=(+$.sTop.value).toFixed(1);
-    $.vAcc.textContent=(+$.sAcc.value).toFixed(2);
-    $.vSta.textContent=(+$.sSta.value).toFixed(0);
-    $.vLuck.textContent=(+$.sLuck.value).toFixed(2);
-    if($.trackLen) $.vLen.textContent=(+$.trackLen.value).toFixed(0);
-    $.colorBox.style.background=$.hColor.value;
-  }
-  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(function(i){ if(i) i.addEventListener('input', function(){ syncLabels(); if(state.me.ready) setReady(false); }); });
-  syncLabels();
+  function syncLabels(){ $.vTop.textContent=(+$.sTop.value).toFixed(1); $.vAcc.textContent=(+$.sAcc.value).toFixed(2); $.vSta.textContent=(+$.sSta.value).toFixed(0); $.vLuck.textContent=(+$.sLuck.value).toFixed(2); if($.trackLen) $.vLen.textContent=(+$.trackLen.value).toFixed(0); $.colorBox.style.background=$.hColor.value; }
+  [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.trackLen].forEach(function(i){ if(i) i.addEventListener('input', function(){ syncLabels(); if(state.me.ready) setReady(false); }); }); syncLabels();
 
-  function initFirebase(){
-    try{
-      state.app=firebase.initializeApp(firebaseConfig);
-      state.db=firebase.database();
-      state.net=true;
-      firebase.auth().signInAnonymously().catch(console.error);
-    }catch(e){ console.error(e); }
-  }
+  function initFirebase(){ try{ state.app=firebase.initializeApp(firebaseConfig); state.db=firebase.database(); state.net=true; firebase.auth().signInAnonymously().catch(console.error); }catch(e){ console.error(e); } }
   initFirebase();
 
-  var sleep=function(ms){ return new Promise(function(r){ setTimeout(r,ms); }); };
-  var clamp=function(n,min,max){ return Math.max(min,Math.min(max,n)); };
-  var randSeeded=function(seed){ var s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/0x100000000; }; };
-  var R=function(path){ return state.db?state.db.ref(path):null; };
-
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+  function clamp(n,min,max){ return Math.max(min,Math.min(max,n)); }
+  function randSeeded(seed){ var s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/0x100000000; }; }
+  function R(path){ return state.db?state.db.ref(path):null; }
   function makeCode(){ return String(Math.floor(Math.random()*10000)).padStart(4,'0'); }
 
-  var COLOR_PALETTE=['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#e84393','#d35400','#27ae60','#2980b9','#8e44ad','#16a085','#2c3e50'];
-  function uniqueColor(desired, excludeSelf){ if(excludeSelf===undefined) excludeSelf=true; var used=new Set(Object.entries(state.players||{}).filter(function(pair){return !excludeSelf||pair[0]!==uid;}).map(function(pair){var p=pair[1]; return p&&p.horse&&p.horse.color;}).filter(Boolean)); if(desired && !used.has(desired)) return desired; for(var i=0;i<COLOR_PALETTE.length;i++){ var c=COLOR_PALETTE[i]; if(!used.has(c)) return c; } for(var j=0;j<360;j+=27){ var h = (j+Math.floor(Math.random()*27))%360; var c2 = 'hsl('+h+' 70% 60%)'; if(!used.has(c2)) return c2; } return '#7dd3fc'; }
+  var COLORS=['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#e84393','#d35400','#27ae60','#2980b9','#8e44ad','#16a085','#2c3e50'];
+  function uniqueColor(desired, excludeSelf){ if(excludeSelf===undefined) excludeSelf=true; var used=new Set(Object.entries(state.players||{}).filter(function(pair){return !excludeSelf||pair[0]!==uid;}).map(function(pair){var p=pair[1]; return p&&p.horse&&p.horse.color;}).filter(Boolean)); if(desired && !used.has(desired)) return desired; for(var i=0;i<COLORS.length;i++){ if(!used.has(COLORS[i])) return COLORS[i]; } for(var j=0;j<360;j+=27){ var c='hsl('+((j+Math.floor(Math.random()*27))%360)+' 70% 60%)'; if(!used.has(c)) return c; } return '#7dd3fc'; }
+  function buildLanes(){ var lanes=[]; Object.entries(state.players||{}).forEach(function(ent){ var id=ent[0], p=ent[1]; lanes.push({id:id, color:(p&&p.horse&&p.horse.color)||'#7dd3fc'}); }); state.lanes=lanes; }
 
-  function buildLanesFromPlayers(){ var lanes=[]; Object.entries(state.players||{}).forEach(function(ent){ var id=ent[0], p=ent[1]; lanes.push({id:id, color:(p&&p.horse&&p.horse.color)||'#7dd3fc'}); }); state.lanes=lanes; }
+  function updateHeader(){ $.hostBadge.textContent = state.isHost? 'ホスト':'参加者'; }
+  function updateRoleUI(){ var host=state.isHost; var joined=!!state.lobbyCode && (!!(state.players && state.players[uid]) || state.isHost); if($.trackRow) $.trackRow.style.display=host?'':'none'; if($.ready) $.ready.style.display=joined?'':'none'; var nh=el('nameHorse'); if(nh) nh.style.display=joined?'':'none'; lockInputs(); updateButtons(); updateStartVisibility(); }
+  function lockInputs(){ var trackEditable=state.isHost && !state.started; [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.save].forEach(function(e){ if(e) e.disabled=!!state.started; }); if($.trackLen) $.trackLen.disabled=!trackEditable; }
+  function updateButtons(){ var disableAll=state.started; [$.create,$.joinBtn,$.save,$.ready,$.start,$.leave,$.reset].forEach(function(b){ if(!b) return; b.disabled=!!disableAll; }); var showAbort=state.isHost && state.started && !state.abandoned; if($.abort){ $.abort.style.display=showAbort?'inline-block':'none'; $.abort.disabled=!showAbort; } }
 
-  function updateHeader(){ el('hostBadge').textContent = state.isHost? 'ホスト' : '参加者'; }
-
-  function updateRoleUI(){
-    var host = state.isHost;
-    var joined = !!state.lobbyCode && (!!(state.players && state.players[uid]) || state.isHost);
-    if($.trackRow) $.trackRow.style.display = host ? '' : 'none';
-    if($.ready) $.ready.style.display = joined ? '' : 'none';
-    var nh = el('nameHorse'); if(nh) nh.style.display = joined ? '' : 'none';
-    applyLockState(); updateButtonsState(); updateStartVisibility();
-  }
-
-  function applyLockState(){
-    var trackEditable = state.isHost && !state.started;
-    [$.sTop,$.sAcc,$.sSta,$.sLuck,$.hColor,$.save].forEach(function(e){ if(e) e.disabled = !!state.started; });
-    if($.trackLen){ $.trackLen.disabled = !trackEditable; }
-  }
-
-  function updateButtonsState(){
-    var disableAll = state.started;
-    [ $.create,$.joinBtn,$.save,$.ready,$.start,$.leave,$.reset ].forEach(function(b){ if(!b) return; b.disabled = !!disableAll; });
-    var showAbort = state.isHost && state.started && !state.abandoned;
-    if($.abort){ $.abort.style.display = showAbort ? 'inline-block' : 'none'; $.abort.disabled = !showAbort; }
-  }
-
-  function renderPlayers(){
-    $.playersList.innerHTML='';
-    var keys=Object.keys(state.players||{});
-    if(keys.length===0){ $.playersList.innerHTML='<div class="muted">（まだ参加者はいません）</div>'; return; }
-    keys.forEach(function(id){
-      var p=state.players[id]; if(!p) return;
-      var div=document.createElement('div'); div.className='row'; div.style.justifyContent='space-between';
-      var status=p.ready?'<span class="badge" style="border-color:#6cff80">READY</span>':'<span class="badge" style="border-color:#ffd166">待機</span>';
-      var html='<div><b>'+ (p.name||'名無し') +'</b> <span class="muted">/ '+ ((p.horse&&p.horse.name)||'馬') +'</span></div>'+
-               '<div class="row">'+status+' <span class="badge" style="border-color:'+ ((p.horse&&p.horse.color)||'#888') +'">'+ ((p.horse&&p.horse.color)||'#888') +'</span>'+
-               '<span class="muted">V'+ ((p.horse&&p.horse.topSpeed)||'?') +' A'+ ((p.horse&&p.horse.accel)||'?') +' S'+ ((p.horse&&p.horse.stamina)||'?') +' L'+ ((p.horse&&p.horse.luck)||'?') +' </span></div>';
-      div.innerHTML=html; $.playersList.appendChild(div);
-    });
-  }
-
-  function renderResults(){
-    var res=state.results||[]; if(!res.length){ $.results.style.display='none'; $.results.innerHTML=''; return; }
-    $.results.style.display='block';
-    $.results.innerHTML='<b>結果</b>' + res.map(function(r){
-      return '<div class="row" style="justify-content:space-between"><span>'+r.rank+'. <b>'+r.player+'</b> <span class="muted">/ '+r.horse+'</span></span> <span class="badge" style="border-color:'+r.color+'">'+r.color+'</span></div>';
-    }).join('');
-  }
-
+  function renderPlayers(){ $.playersList.innerHTML=''; var keys=Object.keys(state.players||{}); if(keys.length===0){ $.playersList.innerHTML='<div class="muted">（まだ参加者はいません）</div>'; return; } keys.forEach(function(id){ var p=state.players[id]; if(!p) return; var div=document.createElement('div'); div.className='row'; div.style.justifyContent='space-between'; var status=p.ready?'<span class="badge" style="border-color:#6cff80">READY</span>':'<span class="badge" style="border-color:#ffd166">待機</span>'; div.innerHTML='<div><b>'+ (p.name||'名無し') +'</b> <span class="muted">/ '+ ((p.horse&&p.horse.name)||'馬') +'</span></div>'+'<div class="row">'+status+' <span class="badge" style="border-color:'+ ((p.horse&&p.horse.color)||'#888') +'">'+ ((p.horse&&p.horse.color)||'#888') +'</span> <span class="muted">V'+ ((p.horse&&p.horse.topSpeed)||'?') +' A'+ ((p.horse&&p.horse.accel)||'?') +' S'+ ((p.horse&&p.horse.stamina)||'?') +' L'+ ((p.horse&&p.horse.luck)||'?') +' </span></div>'; $.playersList.appendChild(div); }); }
+  function renderResults(){ var res=state.results||[]; if(!res.length){ $.results.style.display='none'; $.results.innerHTML=''; return; } $.results.style.display='block'; $.results.innerHTML='<b>結果</b>'+ res.map(function(r){ return '<div class="row" style="justify-content:space-between"><span>'+r.rank+'. <b>'+r.player+'</b> <span class="muted">/ '+r.horse+'</span></span> <span class="badge" style="border-color:'+r.color+'">'+r.color+'</span></div>'; }).join(''); }
   function everyoneReady(){ var ps=state.players||{}; var ids=Object.keys(ps); if(!ids.length) return false; return ids.every(function(id){ return ps[id]&&ps[id].ready; }); }
-  function updateStartVisibility(){ var show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
-  function updateReadyButton(){ $.ready.textContent=state.me.ready? '準備解除':'準備OK'; $.ready.className=state.me.ready? 'secondary':'success'; }
+  function updateStartVisibility(){ var show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show?'inline-block':'none'; }
+  function updateReadyText(){ $.ready.textContent=state.me.ready? '準備解除':'準備OK'; $.ready.className=state.me.ready? 'secondary':'success'; }
 
-  function collectHorse(){ return { name: $.hName.value.trim()||'ノーマル', color: $.hColor.value, topSpeed:+(+$.sTop.value).toFixed(2), accel:+(+$.sAcc.value).toFixed(2), stamina:+(+$.sSta.value).toFixed(0), luck:+(+$.sLuck.value).toFixed(2) }; }
-
-  function ensurePresence(){ if(!state.net || !state.lobbyCode) return; try{ var pref=R('lobbies/'+state.lobbyCode+'/players/'+uid); if(pref) pref.onDisconnect().remove(); if(state.isHost){ var lref=R('lobbies/'+state.lobbyCode); if(lref){ lref.child('started').onDisconnect().set(false); lref.child('abandoned').onDisconnect().set({ at: Date.now(), reason:'host_disconnected' }); } R('lobbies/'+state.lobbyCode+'/state').onDisconnect().remove(); R('lobbies/'+state.lobbyCode+'/results').onDisconnect().remove(); } }catch(e){ console.warn('presence onDisconnect failed', e); } }
-
-  async function upsertMe(){ if(state.started){ ensurePresence(); return; } var name=$.pName.value.trim()||('Player-'+uid.slice(0,4).toUpperCase()); var horse=collectHorse(); horse.color=uniqueColor(horse.color,true); $.hColor.value=horse.color; $.colorBox.style.background=horse.color; state.me.name=name; state.me.horse=horse; $.who.textContent=name; if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ name:name, horse:horse, updatedAt:Date.now(), ready:state.me.ready||false }); ensurePresence(); } else { state.players[uid]={ name:name, horse:horse, ready:state.me.ready||false }; renderPlayers(); buildLanesFromPlayers(); updateStartVisibility(); } }
-
-  async function setReady(val){ state.me.ready=!!val; updateReadyButton(); if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ ready:state.me.ready, updatedAt:Date.now() }); } renderPlayers(); updateStartVisibility(); }
+  function horseFromUI(){ return { name:$.hName.value.trim()||'ノーマル', color:$.hColor.value, topSpeed:+(+$.sTop.value).toFixed(2), accel:+(+$.sAcc.value).toFixed(2), stamina:+(+$.sSta.value).toFixed(0), luck:+(+$.sLuck.value).toFixed(2) }; }
+  function ensurePresence(){ if(!state.net || !state.lobbyCode) return; try{ var pref=R('lobbies/'+state.lobbyCode+'/players/'+uid); if(pref) pref.onDisconnect().remove(); if(state.isHost){ var lref=R('lobbies/'+state.lobbyCode); if(lref){ lref.child('started').onDisconnect().set(false); lref.child('abandoned').onDisconnect().set({ at:Date.now(), reason:'host_disconnected' }); } R('lobbies/'+state.lobbyCode+'/state').onDisconnect().remove(); R('lobbies/'+state.lobbyCode+'/results').onDisconnect().remove(); } }catch(e){ console.warn('presence failed',e); } }
+  async function upsertMe(){ if(state.started){ ensurePresence(); return; } var name=$.pName.value.trim()||('Player-'+uid.slice(0,4).toUpperCase()); var horse=horseFromUI(); horse.color=uniqueColor(horse.color,true); $.hColor.value=horse.color; $.colorBox.style.background=horse.color; state.me.name=name; state.me.horse=horse; $.who.textContent=name; if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ name:name, horse:horse, updatedAt:Date.now(), ready:state.me.ready||false }); ensurePresence(); } else { state.players[uid]={ name:name, horse:horse, ready:state.me.ready||false }; renderPlayers(); buildLanes(); updateStartVisibility(); } }
+  async function setReady(val){ state.me.ready=!!val; updateReadyText(); if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ ready:state.me.ready, updatedAt:Date.now() }); } renderPlayers(); updateStartVisibility(); }
 
   async function createLobby(){ var code=makeCode(); state.lobbyCode=code; state.isHost=true; updateHeader(); if(state.net){ await R('lobbies/'+code).set({ createdAt:Date.now(), hostId:uid, started:false, abandoned:null, trackLen:+($.trackLen?$.trackLen.value:1200), seed:0 }); subscribeLobby(code); } $.code.textContent=code; history.replaceState(null,'', location.pathname+'?room='+code); await upsertMe(); ensurePresence(); updateRoleUI(); }
-
   async function joinLobby(code){ state.lobbyCode=code; state.isHost=false; updateHeader(); if(state.net){ subscribeLobby(code); ensurePresence(); await sleep(50); await upsertMe(); } $.code.textContent=code; history.replaceState(null,'', location.pathname+'?room='+code); updateRoleUI(); }
-
   async function abandonRace(reason){ if(!state.net || !state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:{ at:Date.now(), reason:reason } }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); }
+  async function abortToLobby(){ if(!(state.isHost && state.started)) return; if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null }); await R('lobbies/'+state.lobbyCode'/state').remove(); } state.started=false; state.abandoned=null; state.results=[]; state.lastState=null; sim.reset(); drawRace(); lockInputs(); updateButtons(); updateStartVisibility(); }
 
-  async function abortToLobby(){ if(!(state.isHost && state.started)) return; if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null }); await R('lobbies/'+state.lobbyCode+'/state').remove(); } state.started=false; state.abandoned=null; state.results=[]; state.lastState=null; sim.reset(); drawRace(); applyLockState(); updateButtonsState(); updateStartVisibility(); }
+  function subscribeLobby(code){ if(!state.net) return; R('lobbies/'+code).on('value', function(snap){ var v=snap.val()||{}; state.lobby=v; state.started=!!v.started; state.seed=v.seed||0; state.trackLen=v.trackLen||1200; state.abandoned=v.abandoned||null; if($.trackLen) $.trackLen.value=state.trackLen; syncLabels(); lockInputs(); updateButtons(); if(state.abandoned){ $.count.textContent='試合放棄'; } else if(!state.started){ $.count.textContent=''; } updateStartVisibility(); }); R('lobbies/'+code+'/players').on('value', function(snap){ state.players=snap.val()||{}; renderPlayers(); buildLanes(); updateRoleUI(); updateStartVisibility(); if(state.isHost && state.started && state.racePlayerIds.length){ var nowIds=new Set(Object.keys(state.players)); for(var i=0;i<state.racePlayerIds.length;i++){ var pid=state.racePlayerIds[i]; if(!nowIds.has(pid)){ abandonRace('player_left'); break; } } } }); R('lobbies/'+code+'/state').on('value', function(snap){ state.lastState=snap.val()||null; }); R('lobbies/'+code+'/results').on('value', function(snap){ state.results=snap.val()||[]; renderResults(); }); }
 
-  function subscribeLobby(code){ if(!state.net) return; R('lobbies/'+code).on('value', function(snap){ var v=snap.val()||{}; state.lobby=v; state.started=!!v.started; state.seed=v.seed||0; state.trackLen=v.trackLen||1200; state.abandoned=v.abandoned||null; if($.trackLen) $.trackLen.value=state.trackLen; syncLabels(); applyLockState(); updateButtonsState(); if(state.abandoned){ $.count.textContent='試合放棄'; } else if(!state.started){ $.count.textContent=''; } updateStartVisibility(); }); R('lobbies/'+code+'/players').on('value', function(snap){ state.players=snap.val()||{}; renderPlayers(); buildLanesFromPlayers(); updateRoleUI(); updateStartVisibility(); if(state.isHost && state.started && state.racePlayerIds.length){ var nowIds=new Set(Object.keys(state.players)); for(var i=0;i<state.racePlayerIds.length;i++){ var pid=state.racePlayerIds[i]; if(!nowIds.has(pid)){ abandonRace('player_left'); break; } } } }); R('lobbies/'+code+'/state').on('value', function(snap){ state.lastState=snap.val()||null; }); R('lobbies/'+code+'/results').on('value', function(snap){ state.results=snap.val()||[]; renderResults(); }); }
+  async function leaveLobby(){ if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).remove(); if(state.isHost && state.started){ await abandonRace('host_left'); } } state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[]; state.abandoned=null; $.code.textContent='-'; $.who.textContent='未接続'; renderPlayers(); buildLanes(); renderResults(); updateStartVisibility(); updateRoleUI(); history.replaceState(null,'', location.pathname); }
 
-  async function leaveLobby(){ if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).remove(); if(state.isHost && state.started){ await abandonRace('host_left'); } } state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[]; state.abandoned=null; $.code.textContent='-'; $.who.textContent='未接続'; renderPlayers(); buildLanesFromPlayers(); renderResults(); updateStartVisibility(); updateRoleUI(); history.replaceState(null,'', location.pathname); }
-
-  var sim = {
-    running:false, horses:{}, order:[],
-    reset:function(){ this.horses={}; this.order=[]; this.running=false; $.results.style.display='none'; $.count.textContent=''; },
-    setupFromPlayers:function(){ var lanes=[]; Object.entries(state.players||{}).forEach(function(ent){ var id=ent[0], p=ent[1]; var h=p.horse||{}; sim.horses[id]={ id:id, name:p.name||(id.slice(0,4)), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id:id, color:h.color||'#fff'}); }); state.lanes=lanes; },
-    start: async function(){ this.reset(); this.setupFromPlayers(); state.started=true; state.abandoned=null; if(state.isHost){ state.seed=Math.floor(Math.random()*1e9); state.trackLen=+($.trackLen?$.trackLen.value:1200); state.racePlayerIds=Object.keys(state.players||{}); if(state.net){ await R('lobbies/'+state.lobbyCode).update({ started:true, abandoned:null, seed:state.seed, trackLen:state.trackLen }); } } updateButtonsState(); applyLockState(); for(var i=3;i>0;i--){ $.count.textContent=String(i); await sleep(800);} $.count.textContent='GO!'; await sleep(400); $.count.textContent=''; if(state.isHost){ this.loopHost(); } },
-    physics:function(dt,noise){ var L=state.trackLen; for(var id in this.horses){ var H=this.horses[id]; if(H.done) continue; var spec=H.horse; var fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); var accel=spec.accel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; H.v=clamp(H.v+accel*dt,0,spec.topSpeed*(1-0.4*fatigue)); H.x+=H.v*dt; H.s-=(0.015*H.v*H.v+0.5*dt); if(H.x>=L){ H.x=L; H.done=true; this.order.push(id);} } },
-    loopHost:function(){ this.running=true; var noise=randSeeded(state.seed); var L=state.trackLen; var last=performance.now(), sendAcc=0; var step=function(now){ if(!sim.running||!state.started||state.abandoned){ return; } var dt=Math.min(0.05,(now-last)/1000); last=now; sim.physics(dt,noise); sendAcc+=dt; if(sendAcc>0.10 && state.net){ var pos={}, vel={}, colors={}; Object.values(sim.horses).forEach(function(H){ pos[H.id]=Math.round(H.x); vel[H.id]=Math.round(H.v*100)/100; var p=state.players[H.id]; colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; }); R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L:L, pos:pos, vel:vel, colors:colors }); sendAcc=0; } drawRace(); if(sim.order.length===Object.keys(sim.horses).length){ sim.finish(); return; } requestAnimationFrame(step); }; requestAnimationFrame(step); },
-    finish: async function(){ this.running=false; var out=this.order.map(function(id,idx){ var p=state.players[id]; return { rank:idx+1, id:id, player:(p&&p.name)||id, horse:(p&&p.horse&&p.horse.name)||'馬', color:(p&&p.horse&&p.horse.color)||'#fff' }; }); if(state.net){ await R('lobbies/'+state.lobbyCode+'/results').set(out); await R('lobbies/'+state.lobbyCode').update({ started:false }); } state.results=out; renderResults(); state.started=false; updateButtonsState(); applyLockState(); }
-  };
+  var sim={ running:false, horses:{}, order:[], reset:function(){ this.horses={}; this.order=[]; this.running=false; $.results.style.display='none'; $.count.textContent=''; }, setupFromPlayers:function(){ var lanes=[]; Object.entries(state.players||{}).forEach(function(ent){ var id=ent[0], p=ent[1], h=p.horse||{}; sim.horses[id]={ id:id, name:p.name||(id.slice(0,4)), horse:h, x:0, v:0, s:h.stamina||200, done:false }; lanes.push({id:id, color:h.color||'#fff'}); }); state.lanes=lanes; }, start:async function(){ this.reset(); this.setupFromPlayers(); state.started=true; state.abandoned=null; if(state.isHost){ state.seed=Math.floor(Math.random()*1e9); state.trackLen=+($.trackLen?$.trackLen.value:1200); state.racePlayerIds=Object.keys(state.players||{}); if(state.net){ await R('lobbies/'+state.lobbyCode).update({ started:true, abandoned:null, seed:state.seed, trackLen:state.trackLen }); } } updateButtons(); lockInputs(); for(var i=3;i>0;i--){ $.count.textContent=String(i); await sleep(800);} $.count.textContent='GO!'; await sleep(400); $.count.textContent=''; if(state.isHost){ this.loopHost(); } }, physics:function(dt,noise){ var L=state.trackLen; for(var id in this.horses){ var H=this.horses[id]; if(H.done) continue; var spec=H.horse; var fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); var accel=spec.accel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; H.v=clamp(H.v+accel*dt,0,spec.topSpeed*(1-0.4*fatigue)); H.x+=H.v*dt; H.s-=(0.015*H.v*H.v+0.5*dt); if(H.x>=L){ H.x=L; H.done=true; this.order.push(id);} } }, loopHost:function(){ this.running=true; var noise=randSeeded(state.seed); var L=state.trackLen; var last=performance.now(), sendAcc=0; var step=function(now){ if(!sim.running||!state.started||state.abandoned){ return; } var dt=Math.min(0.05,(now-last)/1000); last=now; sim.physics(dt,noise); sendAcc+=dt; if(sendAcc>0.10 && state.net){ var pos={}, vel={}, colors={}; Object.values(sim.horses).forEach(function(H){ pos[H.id]=Math.round(H.x); vel[H.id]=Math.round(H.v*100)/100; var p=state.players[H.id]; colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; }); R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L:L, pos:pos, vel:vel, colors:colors }); sendAcc=0; } drawRace(); if(sim.order.length===Object.keys(sim.horses).length){ sim.finish(); return; } requestAnimationFrame(step); }; requestAnimationFrame(step); }, finish:async function(){ this.running=false; var out=this.order.map(function(id,idx){ var p=state.players[id]; return { rank:idx+1, id:id, player:(p&&p.name)||id, horse:(p&&p.horse&&p.horse.name)||'馬', color:(p&&p.horse&&p.horse.color)||'#fff' }; }); if(state.net){ await R('lobbies/'+state.lobbyCode+'/results').set(out); await R('lobbies/'+state.lobbyCode).update({ started:false }); } state.results=out; renderResults(); state.started=false; updateButtons(); lockInputs(); } };
 
   function setupCanvas(){ var c=$.canvas; var wrap=document.getElementById('canvasWrap'); var dpr=state.dpr; c.width=Math.floor(wrap.clientWidth*dpr); c.height=Math.floor(wrap.clientHeight*dpr); state.ctx=c.getContext('2d'); drawRace(true); }
   window.addEventListener('resize', setupCanvas);
-
   function getPos(id){ if(state.isHost){ return sim.horses[id]&&sim.horses[id].x||0; } var st=state.lastState; if(!st||!st.pos) return 0; return st.pos[id]||0; }
-
   function drawRace(){ var ctx=state.ctx; if(!ctx) return; var c=$.canvas; var dpr=state.dpr; ctx.clearRect(0,0,c.width,c.height); var lanes=state.lanes; var L=state.trackLen; if(!lanes.length){ ctx.fillStyle='rgba(255,255,255,.08)'; ctx.font=(18*dpr)+'px system-ui'; ctx.fillText('ロビーに参加して馬を登録してください',20*dpr,40*dpr); return; } var H=Math.max(60,Math.min(120,(c.height/lanes.length)-10)); var pad=30*dpr; var left=120*dpr; var right=c.width-20*dpr; var w=right-left; ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=2*dpr; ctx.setLineDash([8*dpr,8*dpr]); ctx.beginPath(); ctx.moveTo(left+w,pad); ctx.lineTo(left+w,c.height-pad); ctx.stroke(); ctx.setLineDash([]); ctx.font=(14*dpr)+'px ui-monospace, monospace'; ctx.fillStyle='rgba(255,255,255,.6)'; ctx.fillText(L+' m', left+w-40*dpr, pad-6*dpr); lanes.forEach(function(ln,i){ var y=pad+i*(H+8)+10; ctx.fillStyle='rgba(255,255,255,.03)'; ctx.fillRect(left-10*dpr,y,w+20*dpr,H); var pos=getPos(ln.id); var x=left + w * Math.max(0, Math.min(1, pos/L)); var p=state.players[ln.id]; var col=(state.lastState&&state.lastState.colors&&state.lastState.colors[ln.id])||(p&&p.horse&&p.horse.color)||ln.color||'#7dd3fc'; ctx.fillStyle=col; if(ctx.roundRect){ ctx.roundRect(x-30*dpr, y+H*0.2, 60*dpr, H*0.6, 10*dpr); ctx.fill(); } else { ctx.fillRect(x-30*dpr, y+H*0.2, 60*dpr, H*0.6); } ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font=(16*dpr)+'px system-ui'; var label=((p&&p.name)||'??')+' / '+((p&&p.horse&&p.horse.name)||'馬'); ctx.fillText(label, 14*dpr, y + H*0.55); ctx.fillStyle='rgba(255,255,255,.6)'; ctx.font=(12*dpr)+'px ui-monospace, monospace'; ctx.fillText(Math.round(pos)+'m', x-18*dpr, y + H*0.95); }); }
 
-  // --- Buttons ---
   $.create.addEventListener('click', function(){ createLobby(); });
   $.joinBtn.addEventListener('click', function(){ var name=$.pName.value.trim(); var hname=$.hName.value.trim(); if(!name||!hname){ alert('参加前に「プレイヤー名」と「馬の名前」を入力してください'); return; } var code=($.joinCode.value||'').split('').filter(function(ch){return ch>='0'&&ch<='9';}).join(''); if(code.length!==4){ alert('ロビーコードは4桁の数字です'); return; } joinLobby(code); });
   $.copy.addEventListener('click', function(){ if(!state.lobbyCode) return; navigator.clipboard.writeText(state.lobbyCode); $.copy.textContent='✅'; setTimeout(function(){ $.copy.textContent='📋'; }, 1200); });
@@ -345,22 +208,18 @@
   $.ready.addEventListener('click', function(){ setReady(!state.me.ready); });
   $.start.addEventListener('click', async function(){ if(!state.isHost) return; if(!everyoneReady()){ alert('全員の準備がまだ完了していません'); return; } if(!(state.players[uid]&&state.players[uid].ready)){ alert('ホストも「準備OK」を押してください'); return; } await upsertMe(); sim.start(); });
   $.leave.addEventListener('click', function(){ leaveLobby(); });
-  $.reset.addEventListener('click', async function(){ if(!state.isHost||!state.net||!state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtonsState(); applyLockState(); updateStartVisibility(); });
+  $.reset.addEventListener('click', async function(){ if(!state.isHost||!state.net||!state.lobbyCode) return; await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null, seed:0 }); await R('lobbies/'+state.lobbyCode+'/state').remove(); await R('lobbies/'+state.lobbyCode+'/results').remove(); state.started=false; state.results=[]; state.lastState=null; state.abandoned=null; sim.reset(); drawRace(); updateButtons(); lockInputs(); updateStartVisibility(); });
   $.abort.addEventListener('click', function(){ abortToLobby(); });
 
-  // URLから自動参加
   (function autoJoin(){ var q=new URLSearchParams(location.search); var room=(q.get('room')||'').split('').filter(function(ch){return ch>='0'&&ch<='9';}).join(''); if(room){ joinLobby(room.padStart(4,'0')); } else { updateRoleUI(); } })();
-
-  // 名前/馬名ローカル保存
   (function restoreLocal(){ var pn=localStorage.getItem('playerName'); if(pn) $.pName.value=pn; var hn=localStorage.getItem('horseName'); if(hn) $.hName.value=hn; })();
   $.pName.addEventListener('input', function(){ localStorage.setItem('playerName',$.pName.value); });
   $.hName.addEventListener('input', function(){ localStorage.setItem('horseName',$.hName.value); });
 
-  // キャンバス
-  function setupLoop(){ var step=function(){ drawRace(); requestAnimationFrame(step); }; requestAnimationFrame(step); }
-  setupCanvas(); setupLoop();
+  function setupCanvas(){ var c=$.canvas; var wrap=document.getElementById('canvasWrap'); var dpr=state.dpr; c.width=Math.floor(wrap.clientWidth*dpr); c.height=Math.floor(wrap.clientHeight*dpr); state.ctx=c.getContext('2d'); drawRace(true); }
+  function renderLoop(){ function step(){ drawRace(); requestAnimationFrame(step); } requestAnimationFrame(step); }
+  setupCanvas(); renderLoop();
 
-  // polyfill
   if(!CanvasRenderingContext2D.prototype.roundRect){ CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){ this.beginPath(); this.moveTo(x+r,y); this.lineTo(x+w-r,y); this.quadraticCurveTo(x+w,y,x+w,y+r); this.lineTo(x+w,y+h-r); this.quadraticCurveTo(x+w,y+h,x+w-r,y+h); this.lineTo(x+r,y+h); this.quadraticCurveTo(x,y+h,x,y+h-r); this.lineTo(x,y+r); this.quadraticCurveTo(x,y,x+r,y); this.closePath(); return this; }; }
   </script>
 </body>

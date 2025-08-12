@@ -669,6 +669,9 @@
     const lanes=state.lanes; 
     const L=state.trackLen; 
     
+    // 画面サイズ判定を最初に行う
+    const isSmall = c.width < 400*dpr;
+    
     if(!lanes.length){ 
       ctx.fillStyle='rgba(255,255,255,.08)'; 
       ctx.font=`${16*dpr}px system-ui`; 
@@ -748,8 +751,7 @@
       ctx.lineWidth = 1*dpr;
       ctx.stroke();
       
-      // プレイヤー名をコース内側に表示（スマホでも表示するよう修正）
-      const isSmall = c.width < 400*dpr;
+      // プレイヤー名をコース内側に表示（スマホでも表示）
       if(p?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
         const fontSize = isSmall ? 8*dpr : 9*dpr;
@@ -782,7 +784,7 @@
     });
     
     // レジェンド（スマホでは省略）
-    if(c.width >= 400*dpr) {
+    if(!isSmall) {
       ctx.fillStyle = 'rgba(0,0,0,.3)';
       ctx.fillRect(10*dpr, 10*dpr, 120*dpr, lanes.length * 16*dpr + 20*dpr);
       

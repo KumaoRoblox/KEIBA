@@ -250,20 +250,47 @@
 
   // Firebase 初期化（設定が埋まっていればオンラインON）
   function initFirebase(){
+    // Firebase SDKが読み込めない/ブロックされている場合にクラッシュしないようにガード
+    if (typeof window.firebase === 'undefined') {
+      $.onlineBadge.textContent = 'オフライン（SDK未読込）';
+      $.onlineBadge.style.background='linear-gradient(180deg, rgba(255,209,102,.2), rgba(255,209,102,.12))';
+      $.onlineBadge.style.border='1px solid rgba(255,209,102,.45)';
+      $.cfgPreview.textContent = 'FirebaseのCDNがブロックされている可能性があります。
+・ブラウザの広告/トラッキングブロックを一時OFF
+・別タブ/別ブラウザでこのHTMLを開く
+・ネットワークのフィルタを確認
+を試してください。設定が揃えば自動でオンラインになります。';
+      return; // オフライン・デモとして継続
+    }
     if(!firebaseConfig || !firebaseConfig.apiKey){
       $.onlineBadge.textContent = 'オフライン（デモ）';
       $.onlineBadge.style.background='linear-gradient(180deg, rgba(255,209,102,.2), rgba(255,209,102,.12))';
       $.onlineBadge.style.border='1px solid rgba(255,209,102,.45)';
-      $.cfgPreview.textContent = 'const firebaseConfig = {\n  apiKey: "<APIキー>",\n  authDomain: "<xxx>.firebaseapp.com",\n  databaseURL: "https://<xxx>-default-rtdb.asia-southeast1.firebasedatabase.app",\n  projectId: "<プロジェクトID>",\n  storageBucket: "<xxx>.appspot.com",\n  messagingSenderId: "<数字>",\n  appId: "<appId>"\n};';
+      $.cfgPreview.textContent = 'const firebaseConfig = {
+  apiKey: "<APIキー>",
+  authDomain: "<xxx>.firebaseapp.com",
+  databaseURL: "https://<xxx>-default-rtdb.<region>.firebasedatabase.app",
+  projectId: "<プロジェクトID>",
+  storageBucket: "<xxx>.appspot.com",
+  messagingSenderId: "<数字>",
+  appId: "<appId>"
+};';
       return;
     }
-    state.app = firebase.initializeApp(firebaseConfig);
-    state.db = firebase.database();
-    state.net = true;
-    firebase.auth().signInAnonymously().catch(console.error);
-    $.onlineBadge.textContent = 'オンライン有効（Firebase）';
-    $.onlineBadge.style.background='linear-gradient(180deg, rgba(108,204,255,.25), rgba(108,204,255,.12))';
-    $.onlineBadge.style.border='1px solid rgba(108,204,255,.45)';
+    try{
+      state.app = firebase.initializeApp(firebaseConfig);
+      state.db = firebase.database();
+      state.net = true;
+      firebase.auth().signInAnonymously().catch(console.error);
+      $.onlineBadge.textContent = 'オンライン有効（Firebase）';
+      $.onlineBadge.style.background='linear-gradient(180deg, rgba(108,204,255,.25), rgba(108,204,255,.12))';
+      $.onlineBadge.style.border='1px solid rgba(108,204,255,.45)';
+    }catch(e){
+      console.error(e);
+      $.onlineBadge.textContent = 'オフライン（初期化エラー）';
+      $.onlineBadge.style.background='linear-gradient(180deg, rgba(255,209,102,.2), rgba(255,209,102,.12))';
+      $.onlineBadge.style.border='1px solid rgba(255,209,102,.45)';
+    }
   }
   initFirebase();
 
@@ -355,13 +382,16 @@
     const name = $.pName.value.trim() || `Player-${uid.slice(0,4).toUpperCase()}`;
     const horse = collectHorse();
     state.me.name = name; state.me.horse = horse; $.who.textContent = name;
-    state.me.ready = false;
-    updateReadyButton();
     if(state.net && state.lobbyCode){
       await R(`lobbies/${state.lobbyCode}/players/${uid}`).set({
-        name, horse, updatedAt: Date.now(), ready: false
+        name, horse, updatedAt: Date.now(), ready: state.me.ready||false
       });
+    } else {
+      // オフラインでも最低限UIが動くようにローカル状態を反映
+      state.players[uid] = {name, horse, ready: state.me.ready||false};
+      renderPlayers(); updateStartVisibility();
     }
+  }
   }
 
   // ロビー購読

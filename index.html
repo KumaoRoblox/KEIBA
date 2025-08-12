@@ -26,21 +26,25 @@
     main.racing {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr;
-      height: calc(100vh - 50px);
+      height: 100vh;
       padding: 0;
       gap: 0;
+      max-width: 100vw;
     }
     main.racing #left {
       display: none;
     }
     main.racing #right {
-      height: 100%;
+      height: 100vh;
+      width: 100vw;
       border-radius: 0;
       margin: 0;
       padding: 0;
+      max-width: none;
     }
     main.racing #canvasWrap {
-      height: calc(100vh - 80px);
+      height: 100vh;
+      width: 100vw;
       border-radius: 0;
       position: relative;
     }
@@ -333,7 +337,7 @@
           </div>
         </div>
 
-        <details>
+        <details style="display:none">
           <summary>Firebase 設定を開く</summary>
           <pre class="code" id="cfgPreview"></pre>
         </details>
@@ -394,7 +398,8 @@
     ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
     lanes:[], lastState:null, trackLen:1200,
     racePlayerIds:[],
-    abandoned:null
+    abandoned:null,
+    emptyLobbyTimeout:null // 空ロビー削除用タイマー
   };
 
   const $ = {
@@ -610,6 +615,22 @@
     state.abandoned=null; 
     state.results=[]; 
     state.lastState=null;
+    
+    // 全員の準備状態をリセット
+    if(state.net && state.lobbyCode) {
+      const updates = {};
+      Object.keys(state.players).forEach(playerId => {
+        updates[`lobbies/${state.lobbyCode}/players/${playerId}/ready`] = false;
+      });
+      if(Object.keys(updates).length > 0) {
+        await R('').update(updates);
+      }
+    }
+    
+    // 自分の準備状態もリセット
+    state.me.ready = false;
+    updateReadyButton();
+    
     sim.reset(); 
     if(state.ctx) drawRace();
     applyLockState(); 
@@ -617,26 +638,124 @@
     updateStartVisibility();
   }
 
-  function subscribeLobby(code){ if(!state.net) return;
+  function subscribeLobby(code){ 
+    if(!state.net) return;
+    
     R('lobbies/'+code).on('value', snap=>{
       const v=snap.val()||{};
-      state.lobby=v; state.started=!!v.started; state.seed=v.seed||0; state.trackLen=v.trackLen||1200; state.abandoned=v.abandoned||null;
-      if($.trackLen) $.trackLen.value=state.trackLen; syncLabels(); applyLockState(); updateButtonsState();
-      if(state.abandoned){ $.count.textContent='試合放棄'; } else if(!state.started){ $.count.textContent=''; }
+      state.lobby=v; 
+      state.started=!!v.started; 
+      state.seed=v.seed||0; 
+      state.trackLen=v.trackLen||1200; 
+      state.abandoned=v.abandoned||null;
+      if($.trackLen) $.trackLen.value=state.trackLen; 
+      syncLabels(); 
+      applyLockState(); 
+      updateButtonsState();
+      if(state.abandoned){ 
+        $.count.textContent='試合放棄'; 
+      } else if(!state.started){ 
+        $.count.textContent=''; 
+      }
       updateStartVisibility();
     });
+    
     R('lobbies/'+code+'/players').on('value', snap=>{
-      state.players=snap.val()||{}; renderPlayers(); buildLanesFromPlayers(); updateRoleUI(); updateStartVisibility();
+      const players = snap.val()||{};
+      state.players = players; 
+      renderPlayers(); 
+      buildLanesFromPlayers(); 
+      updateRoleUI(); 
+      updateStartVisibility();
+      
+      // プレイヤー数チェックと自動削除処理
+      checkAndCleanupLobby(code, players);
+      
       if(state.isHost && state.started && state.racePlayerIds.length){
-        const nowIds=new Set(Object.keys(state.players));
-        for(const pid of state.racePlayerIds){ if(!nowIds.has(pid)){ abandonRace('player_left'); break; } }
+        const nowIds=new Set(Object.keys(players));
+        for(const pid of state.racePlayerIds){ 
+          if(!nowIds.has(pid)){ 
+            abandonRace('player_left'); 
+            break; 
+          } 
+        }
       }
     });
-    R('lobbies/'+code+'/state').on('value', snap=>{ state.lastState=snap.val()||null; });
-    R('lobbies/'+code+'/results').on('value', snap=>{ state.results=snap.val()||[]; renderResults(); });
+    
+    R('lobbies/'+code+'/state').on('value', snap=>{ 
+      state.lastState=snap.val()||null; 
+    });
+    
+    R('lobbies/'+code+'/results').on('value', snap=>{ 
+      state.results=snap.val()||[]; 
+      renderResults(); 
+    });
   }
 
-  async function leaveLobby(){ if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).remove(); if(state.isHost && state.started){ await abandonRace('host_left'); } } state.lobbyCode=null; state.isHost=false; state.players={}; state.started=false; state.results=[]; state.abandoned=null; $.code.textContent='-'; $.who.textContent='未接続'; renderPlayers(); buildLanesFromPlayers(); renderResults(); updateStartVisibility(); updateRoleUI(); history.replaceState(null,'', location.pathname); }
+  // ロビー自動削除機能
+  function checkAndCleanupLobby(code, players) {
+    if(!state.net || !code) return;
+    
+    const playerCount = Object.keys(players).length;
+    
+    if(playerCount === 0) {
+      // 誰もいない場合、20秒後に削除予約
+      if(!state.emptyLobbyTimeout) {
+        state.emptyLobbyTimeout = setTimeout(async () => {
+          try {
+            // 20秒後に再度チェック
+            const currentPlayers = await R('lobbies/'+code+'/players').once('value');
+            const currentPlayerCount = Object.keys(currentPlayers.val() || {}).length;
+            
+            if(currentPlayerCount === 0) {
+              // まだ誰もいなければロビーを削除
+              await R('lobbies/'+code).remove();
+              console.log(`Empty lobby ${code} has been automatically deleted`);
+            }
+          } catch(e) {
+            console.warn('Failed to cleanup empty lobby:', e);
+          }
+          state.emptyLobbyTimeout = null;
+        }, 20000); // 20秒
+      }
+    } else {
+      // 誰かがいる場合、削除予約をキャンセル
+      if(state.emptyLobbyTimeout) {
+        clearTimeout(state.emptyLobbyTimeout);
+        state.emptyLobbyTimeout = null;
+      }
+    }
+  }
+
+  async function leaveLobby(){ 
+    // タイマーをクリア
+    if(state.emptyLobbyTimeout) {
+      clearTimeout(state.emptyLobbyTimeout);
+      state.emptyLobbyTimeout = null;
+    }
+    
+    if(state.net && state.lobbyCode){ 
+      await R('lobbies/'+state.lobbyCode+'/players/'+uid).remove(); 
+      if(state.isHost && state.started){ 
+        await abandonRace('host_left'); 
+      } 
+    } 
+    
+    state.lobbyCode=null; 
+    state.isHost=false; 
+    state.players={}; 
+    state.started=false; 
+    state.results=[]; 
+    state.abandoned=null; 
+    $.code.textContent='-'; 
+    $.who.textContent='未接続'; 
+    renderPlayers(); 
+    buildLanesFromPlayers(); 
+    renderResults(); 
+    updateStartVisibility(); 
+    updateRoleUI(); 
+    history.replaceState(null,'', location.pathname); 
+  }
 
   const sim = {
     running:false, horses:{}, order:[],
@@ -698,33 +817,32 @@
     const wrap=document.getElementById('canvasWrap'); 
     const dpr=state.dpr; 
     
-    // レース中は縦長、通常時は横長のアスペクト比
     const containerWidth = wrap.clientWidth;
     const containerHeight = wrap.clientHeight;
     
-    let aspectRatio;
+    // レース中は画面全体を使用
     if(document.querySelector('main').classList.contains('racing')) {
-      // レース中は縦長 (3:4)
-      aspectRatio = 3/4;
+      c.width = Math.floor(containerWidth * dpr); 
+      c.height = Math.floor(containerHeight * dpr); 
     } else {
-      // 通常時は横長 (4:3) 
-      aspectRatio = 4/3;
+      // 通常時は4:3のアスペクト比
+      const aspectRatio = 4/3;
+      let canvasWidth, canvasHeight;
+      
+      if(containerWidth / containerHeight > aspectRatio) {
+        canvasHeight = containerHeight;
+        canvasWidth = canvasHeight * aspectRatio;
+      } else {
+        canvasWidth = containerWidth;
+        canvasHeight = canvasWidth / aspectRatio;
+      }
+      
+      c.width = Math.floor(canvasWidth * dpr); 
+      c.height = Math.floor(canvasHeight * dpr); 
     }
     
-    let canvasWidth, canvasHeight;
-    
-    if(containerWidth / containerHeight > aspectRatio) {
-      canvasHeight = containerHeight;
-      canvasWidth = canvasHeight * aspectRatio;
-    } else {
-      canvasWidth = containerWidth;
-      canvasHeight = canvasWidth / aspectRatio;
-    }
-    
-    c.width = Math.floor(canvasWidth * dpr); 
-    c.height = Math.floor(canvasHeight * dpr); 
-    c.style.width = canvasWidth + 'px';
-    c.style.height = canvasHeight + 'px';
+    c.style.width = '100%';
+    c.style.height = '100%';
     
     state.ctx = c.getContext('2d'); 
     if(state.ctx) drawRace(); 
@@ -765,8 +883,8 @@
     // 楕円コースの設定
     const centerX = c.width / 2;
     const centerY = c.height / 2;
-    const trackWidth = c.width * 0.8;
-    const trackHeight = c.height * 0.7;
+    const trackWidth = Math.min(c.width * 0.8, c.height * 0.8);
+    const trackHeight = trackWidth * 0.6; // 楕円の縦横比を調整
     const radiusX = trackWidth / 2;
     const radiusY = trackHeight / 2;
     
@@ -787,20 +905,25 @@
       }
     }
     
-    // スタート/ゴールライン
-    ctx.strokeStyle = 'rgba(255,255,255,.6)';
-    ctx.lineWidth = 2*dpr;
-    ctx.setLineDash([6*dpr, 6*dpr]);
+    // スタート/ゴールライン（右側）
+    ctx.strokeStyle = 'rgba(255,255,255,.8)';
+    ctx.lineWidth = 3*dpr;
+    ctx.setLineDash([8*dpr, 8*dpr]);
     ctx.beginPath();
     ctx.moveTo(centerX + radiusX, centerY - radiusY);
     ctx.lineTo(centerX + radiusX - laneCount * laneSpacing, centerY - radiusY + laneCount * laneSpacing);
     ctx.stroke();
     ctx.setLineDash([]);
     
+    // スタート/ゴール表示
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.font = `${14*dpr}px system-ui`;
+    ctx.fillText('START/GOAL', centerX + radiusX - 60*dpr, centerY - radiusY - 12*dpr);
+    
     // 距離表示
     ctx.fillStyle = 'rgba(255,255,255,.8)';
     ctx.font = `${12*dpr}px ui-monospace, monospace`;
-    ctx.fillText(`${L}m`, centerX + radiusX - 30*dpr, centerY - radiusY - 8*dpr);
+    ctx.fillText(`${L}m`, centerX + radiusX - 30*dpr, centerY - radiusY - 30*dpr);
     
     // 各馬の描画
     lanes.forEach((ln, i) => {
@@ -812,8 +935,8 @@
       const pos = getPos(ln.id);
       const progress = Math.max(0, Math.min(1, pos / L));
       
-      // 楕円上の位置計算（右上から時計回り）
-      const angle = progress * 2 * Math.PI;
+      // 楕円上の位置計算（右側から時計回り）
+      const angle = -Math.PI/2 + progress * 2 * Math.PI; // 右側(0度)からスタート
       const x = centerX + laneRadiusX * Math.cos(angle);
       const y = centerY + laneRadiusY * Math.sin(angle);
       
@@ -832,35 +955,29 @@
       ctx.lineWidth = 1*dpr;
       ctx.stroke();
       
-      // プレイヤー名をコース内側に表示（スマホでも表示）
+      // プレイヤー名を馬の近くに表示
       if(p?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
-        const fontSize = isSmall ? 8*dpr : 9*dpr;
+        const fontSize = isSmall ? 10*dpr : 12*dpr;
         ctx.font = `${fontSize}px system-ui`;
         const nameWidth = ctx.measureText(p.name).width;
         
-        // 内側に向かって名前を配置
-        const innerRadius = Math.max(10*dpr, Math.min(laneRadiusX, laneRadiusY) - laneSpacing);
-        const innerX = centerX + (innerRadius * 0.7) * Math.cos(angle);
-        const innerY = centerY + (innerRadius * 0.7) * Math.sin(angle);
+        // 名前の背景
+        ctx.fillStyle = 'rgba(0,0,0,.7)';
+        ctx.fillRect(x - nameWidth/2 - 3*dpr, y - horseSize/2 - fontSize - 4*dpr, nameWidth + 6*dpr, fontSize + 4*dpr);
         
-        // スマホでは背景を追加して見やすくする
-        if(isSmall) {
-          ctx.fillStyle = 'rgba(0,0,0,.6)';
-          ctx.fillRect(innerX - nameWidth/2 - 2*dpr, innerY - fontSize/2 - 1*dpr, nameWidth + 4*dpr, fontSize + 2*dpr);
-        }
-        
+        // 名前のテキスト
         ctx.fillStyle = 'rgba(255,255,255,.9)';
-        ctx.fillText(p.name, innerX - nameWidth/2, innerY + 2*dpr);
+        ctx.fillText(p.name, x - nameWidth/2, y - horseSize/2 - 2*dpr);
       }
       
       // 距離表示（小さく）
       if(!isSmall) {
         ctx.fillStyle = 'rgba(255,255,255,.6)';
-        ctx.font = `${7*dpr}px ui-monospace, monospace`;
+        ctx.font = `${8*dpr}px ui-monospace, monospace`;
         const distText = `${Math.round(pos)}m`;
         const distWidth = ctx.measureText(distText).width;
-        ctx.fillText(distText, x - distWidth/2, y - horseSize/2 - 4*dpr);
+        ctx.fillText(distText, x - distWidth/2, y + horseSize/2 + 12*dpr);
       }
     });
     

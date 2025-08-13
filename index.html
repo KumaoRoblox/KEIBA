@@ -723,34 +723,9 @@
     console.log(`Checking lobby ${code}, player count: ${playerCount}`);
     
     if(playerCount === 0) {
-      // 誰もいない場合、3秒後に削除
-      if(!state.emptyLobbyTimeout) {
-        console.log(`Lobby ${code} is empty, scheduling deletion in 3 seconds`);
-        state.emptyLobbyTimeout = setTimeout(async () => {
-          try {
-            // 再度確認してから削除
-            const snapshot = await R('lobbies/'+code+'/players').once('value');
-            const currentPlayers = snapshot.val() || {};
-            const currentPlayerCount = Object.keys(currentPlayers).length;
-            
-            if(currentPlayerCount === 0) {
-              console.log(`Force deleting empty lobby ${code}`);
-              await forceDeleteLobby(code);
-              
-              // 自分がそのロビーにいた場合は状態をリセット
-              if(state.lobbyCode === code) {
-                console.log('Resetting own state due to lobby deletion');
-                resetLobbyState();
-              }
-            } else {
-              console.log(`Lobby ${code} now has ${currentPlayerCount} players, deletion cancelled`);
-            }
-          } catch(e) {
-            console.error('Failed to cleanup empty lobby:', e);
-          }
-          state.emptyLobbyTimeout = null;
-        }, 3000); // 3秒で削除
-      }
+      console.log(`Lobby ${code} is empty, deleting immediately`);
+      // 即座に削除（タイマーなし）
+      forceDeleteLobby(code);
     } else {
       // 誰かがいる場合、削除予約をキャンセル
       if(state.emptyLobbyTimeout) {
@@ -766,35 +741,43 @@
     if(!state.net || !code) return;
     
     try {
-      console.log(`Force deleting lobby ${code} and all its data`);
+      console.log(`=== FORCE DELETING LOBBY ${code} ===`);
       
-      // より強制的な削除：全ての関連データを個別に削除
+      // より強制的な削除：全ての関連データを削除
       const deletePromises = [
         R('lobbies/'+code+'/players').remove(),
         R('lobbies/'+code+'/state').remove(), 
-        R('lobbies/'+code+'/results').remove(),
-        R('lobbies/'+code).remove()
+        R('lobbies/'+code+'/results').remove()
       ];
       
       await Promise.all(deletePromises);
       
-      console.log(`Lobby ${code} and all associated data forcefully deleted`);
+      // 最後にロビー本体を削除
+      await R('lobbies/'+code).remove();
       
-      // 削除後、さらに確実に削除されたかチェック
+      console.log(`Lobby ${code} completely deleted from Firebase`);
+      
+      // さらに確実にするため、少し待ってから再度削除を試行
       setTimeout(async () => {
         try {
-          const checkSnapshot = await R('lobbies/'+code).once('value');
-          if(checkSnapshot.exists()) {
-            console.log(`Lobby ${code} still exists after deletion, retrying...`);
-            await R('lobbies/'+code).remove();
-          }
+          await R('lobbies/'+code).remove();
+          console.log(`Secondary deletion of lobby ${code} completed`);
         } catch(e) {
-          console.log('Verification check completed or failed:', e.message);
+          console.log('Secondary deletion completed or failed:', e.message);
         }
       }, 1000);
       
     } catch(e) {
       console.error('Force delete failed:', e);
+      // エラーでも諦めずに再試行
+      setTimeout(async () => {
+        try {
+          await R('lobbies/'+code).remove();
+          console.log(`Retry deletion of lobby ${code} completed`);
+        } catch(e2) {
+          console.error('Retry deletion also failed:', e2);
+        }
+      }, 2000);
     }
   }
 
@@ -802,36 +785,43 @@
   function startLobbyCleanupScheduler() {
     if(!state.net) return;
     
-    // 10分ごとに古いロビーをチェック
+    console.log('Starting aggressive lobby cleanup scheduler');
+    
+    // 1分ごとに古いロビーをチェック（より頻繁に）
     setInterval(async () => {
       try {
-        console.log('Running scheduled lobby cleanup...');
+        console.log('Running aggressive lobby cleanup...');
         
         const snapshot = await R('lobbies').once('value');
         const lobbies = snapshot.val() || {};
         
         const now = Date.now();
-        const oneHourAgo = now - (60 * 60 * 1000); // 1時間前
+        const thirtyMinutesAgo = now - (30 * 60 * 1000); // 30分前に短縮
         
         for(const [lobbyCode, lobbyData] of Object.entries(lobbies)) {
-          if(!lobbyData) continue;
+          if(!lobbyData) {
+            // データが null の場合も削除
+            console.log(`Cleaning up null lobby: ${lobbyCode}`);
+            await R('lobbies/'+lobbyCode).remove();
+            continue;
+          }
           
           const createdAt = lobbyData.createdAt || 0;
           const players = lobbyData.players || {};
           const playerCount = Object.keys(players).length;
           
-          // 1時間以上経過したロビーまたは空のロビーを削除
-          if(createdAt < oneHourAgo || playerCount === 0) {
+          // 30分以上経過したロビーまたは空のロビーを削除
+          if(createdAt < thirtyMinutesAgo || playerCount === 0) {
             console.log(`Cleaning up old/empty lobby: ${lobbyCode}`);
             await forceDeleteLobby(lobbyCode);
           }
         }
         
-        console.log('Scheduled lobby cleanup completed');
+        console.log('Aggressive lobby cleanup completed');
       } catch(e) {
-        console.error('Scheduled cleanup failed:', e);
+        console.error('Aggressive cleanup failed:', e);
       }
-    }, 10 * 60 * 1000); // 10分間隔
+    }, 1 * 60 * 1000); // 1分間隔
   }
 
   const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
@@ -1065,10 +1055,11 @@
   }
 
   async function upsertMe(newMood = false){
-    console.log('upsertMe called, current state:', {
+    console.log('upsertMe called:', {
       started: state.started,
       lobbyCode: state.lobbyCode,
-      isHost: state.isHost
+      isHost: state.isHost,
+      newMood: newMood
     });
     
     if(state.started){ 
@@ -1076,9 +1067,9 @@
       return; 
     }
     
-    // ロビーに参加していない場合は何もしない（復活防止）
+    // ロビーに参加していない場合は何もしない（復活防止の最重要チェック）
     if(!state.lobbyCode) {
-      console.log('No lobby code, skipping upsertMe');
+      console.log('❌ No lobby code - PREVENTING RESURRECTION');
       return;
     }
     
@@ -1097,24 +1088,24 @@
     state.me.saved = true;
     
     if(state.net && state.lobbyCode){
-      // 削除されたロビーに書き込まないよう事前チェック
       try {
-        console.log('Checking lobby existence before writing player data...');
+        console.log('🔍 Checking if lobby exists before writing...');
         const lobbySnapshot = await R('lobbies/'+state.lobbyCode).once('value');
         if(!lobbySnapshot.exists()) {
-          console.log('Lobby no longer exists during upsertMe, aborting');
+          console.log('❌ Lobby does not exist - ABORTING TO PREVENT RESURRECTION');
           state.loading = false;
           resetLobbyState();
           return;
         }
         
-        console.log('Lobby exists, writing player data');
+        console.log('✅ Lobby exists, proceeding with player data write');
         await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ 
           name, horse, updatedAt:Date.now(), ready:state.me.ready||false 
         });
+        console.log('✅ Player data written successfully');
         ensurePresence();
       } catch(e) {
-        console.error('Failed to update player data:', e);
+        console.error('❌ Failed to update player data:', e);
         state.loading = false;
         resetLobbyState();
         return;
@@ -1554,6 +1545,8 @@
   }
 
   async function leaveLobby(){ 
+    console.log('=== LEAVING LOBBY START ===');
+    
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
       clearTimeout(state.emptyLobbyTimeout);
@@ -1563,42 +1556,59 @@
     const currentLobbyCode = state.lobbyCode;
     const wasHost = state.isHost;
     
+    console.log('Leaving lobby:', currentLobbyCode, 'was host:', wasHost);
+    
+    // 先にリスナーをクリアして復活を防ぐ
+    cleanupLobbyListeners();
+    
     if(state.net && currentLobbyCode){ 
-      await R('lobbies/'+currentLobbyCode+'/players/'+uid).remove(); 
-      
-      if(wasHost && state.started){ 
-        await R('lobbies/'+currentLobbyCode).update({ 
-          started:false, 
-          abandoned:{ at:Date.now(), reason:'host_left' } 
-        });
-      } 
-      
-      // 離脱後に即座にロビーの削除チェック
-      setTimeout(async () => {
-        try {
-          const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
-          const remainingPlayers = snapshot.val() || {};
-          const playerCount = Object.keys(remainingPlayers).length;
-          
-          console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
-          
-          if(playerCount === 0) {
-            console.log('No players remaining, force deleting lobby');
-            await forceDeleteLobby(currentLobbyCode);
-          }
-        } catch(e) {
-          console.error('Error checking lobby after leaving:', e);
-          // エラーでも強制削除を試行
-          try {
-            await forceDeleteLobby(currentLobbyCode);
-          } catch(e2) {
-            console.error('Force delete also failed:', e2);
-          }
+      try {
+        await R('lobbies/'+currentLobbyCode+'/players/'+uid).remove(); 
+        console.log('Player removed from Firebase');
+        
+        if(wasHost && state.started){ 
+          await R('lobbies/'+currentLobbyCode).update({ 
+            started:false, 
+            abandoned:{ at:Date.now(), reason:'host_left' } 
+          });
+          console.log('Lobby abandoned due to host leaving');
+        } 
+        
+        // 強制的にロビー全体を削除（ホストの場合）
+        if(wasHost) {
+          console.log('Host leaving, force deleting entire lobby');
+          await forceDeleteLobby(currentLobbyCode);
+        } else {
+          // 離脱後に即座にロビーの削除チェック
+          setTimeout(async () => {
+            try {
+              const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
+              const remainingPlayers = snapshot.val() || {};
+              const playerCount = Object.keys(remainingPlayers).length;
+              
+              console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
+              
+              if(playerCount === 0) {
+                console.log('No players remaining, force deleting lobby');
+                await forceDeleteLobby(currentLobbyCode);
+              }
+            } catch(e) {
+              console.error('Error checking lobby after leaving:', e);
+              await forceDeleteLobby(currentLobbyCode);
+            }
+          }, 500);
         }
-      }, 500); // 0.5秒後に実行
+      } catch(e) {
+        console.error('Error during leave process:', e);
+        // エラーでも強制削除
+        await forceDeleteLobby(currentLobbyCode);
+      }
     } 
     
+    // 状態を即座にリセット
     resetLobbyState();
+    
+    console.log('=== LEAVING LOBBY COMPLETE ===');
   }
 
   async function abandonRace(reason){ 

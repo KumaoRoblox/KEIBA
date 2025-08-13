@@ -768,13 +768,31 @@
     try {
       console.log(`Force deleting lobby ${code} and all its data`);
       
-      // 個別に全て削除
-      await R('lobbies/'+code+'/players').remove();
-      await R('lobbies/'+code+'/state').remove();
-      await R('lobbies/'+code+'/results').remove();
-      await R('lobbies/'+code).remove();
+      // より強制的な削除：全ての関連データを個別に削除
+      const deletePromises = [
+        R('lobbies/'+code+'/players').remove(),
+        R('lobbies/'+code+'/state').remove(), 
+        R('lobbies/'+code+'/results').remove(),
+        R('lobbies/'+code).remove()
+      ];
       
-      console.log(`Lobby ${code} and all associated data deleted`);
+      await Promise.all(deletePromises);
+      
+      console.log(`Lobby ${code} and all associated data forcefully deleted`);
+      
+      // 削除後、さらに確実に削除されたかチェック
+      setTimeout(async () => {
+        try {
+          const checkSnapshot = await R('lobbies/'+code).once('value');
+          if(checkSnapshot.exists()) {
+            console.log(`Lobby ${code} still exists after deletion, retrying...`);
+            await R('lobbies/'+code).remove();
+          }
+        } catch(e) {
+          console.log('Verification check completed or failed:', e.message);
+        }
+      }, 1000);
+      
     } catch(e) {
       console.error('Force delete failed:', e);
     }
@@ -1047,7 +1065,22 @@
   }
 
   async function upsertMe(newMood = false){
-    if(state.started){ ensurePresence(); return; }
+    console.log('upsertMe called, current state:', {
+      started: state.started,
+      lobbyCode: state.lobbyCode,
+      isHost: state.isHost
+    });
+    
+    if(state.started){ 
+      ensurePresence(); 
+      return; 
+    }
+    
+    // ロビーに参加していない場合は何もしない（復活防止）
+    if(!state.lobbyCode) {
+      console.log('No lobby code, skipping upsertMe');
+      return;
+    }
     
     state.loading = true;
     
@@ -1066,14 +1099,16 @@
     if(state.net && state.lobbyCode){
       // 削除されたロビーに書き込まないよう事前チェック
       try {
+        console.log('Checking lobby existence before writing player data...');
         const lobbySnapshot = await R('lobbies/'+state.lobbyCode).once('value');
         if(!lobbySnapshot.exists()) {
-          console.log('Lobby no longer exists during upsertMe, resetting state');
+          console.log('Lobby no longer exists during upsertMe, aborting');
           state.loading = false;
           resetLobbyState();
           return;
         }
         
+        console.log('Lobby exists, writing player data');
         await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ 
           name, horse, updatedAt:Date.now(), ready:state.me.ready||false 
         });
@@ -1084,7 +1119,8 @@
         resetLobbyState();
         return;
       }
-    } else {
+    } else if(!state.net) {
+      // オフライン時のみローカル処理
       state.players[uid]={ name, horse, ready:state.me.ready||false };
       renderPlayers(); 
       buildLanesFromPlayers(); 
@@ -2246,46 +2282,17 @@
   (async function autoJoin(){ 
     console.log('Auto-join process starting...');
     
-    // Firebase初期化を待つ
-    if(state.net) {
-      const initialized = await waitForFirebase();
-      if(!initialized) {
-        console.error('Firebase initialization timeout during auto-join');
-        updateRoleUI();
-        return;
-      }
-    }
-    
     const q=new URLSearchParams(location.search); 
     const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); 
     
     if(room){ 
       const roomCode = room.padStart(4,'0');
-      console.log('Auto-joining room from URL:', roomCode);
+      console.log('Found room code in URL:', roomCode);
       
-      // ネットワーク接続がある場合、ロビーの存在確認
-      if(state.net) {
-        try {
-          const lobbySnapshot = await R('lobbies/'+roomCode).once('value');
-          if(lobbySnapshot.exists()) {
-            console.log('Lobby exists, proceeding with auto-join');
-            await joinLobby(roomCode);
-          } else {
-            console.log('Lobby in URL does not exist, clearing URL');
-            // URLのロビーコードを削除
-            history.replaceState(null, '', location.pathname);
-            updateRoleUI();
-          }
-        } catch(e) {
-          console.error('Error checking lobby from URL:', e);
-          // エラーの場合もURLをクリア
-          history.replaceState(null, '', location.pathname);
-          updateRoleUI();
-        }
-      } else {
-        // ネットワークがない場合はそのまま参加試行
-        await joinLobby(roomCode);
-      }
+      // URLにロビーコードがある場合は無条件でクリア（復活防止）
+      console.log('Clearing room code from URL to prevent lobby resurrection');
+      history.replaceState(null, '', location.pathname);
+      updateRoleUI();
     } else { 
       updateRoleUI(); 
     } 

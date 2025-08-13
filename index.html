@@ -1093,21 +1093,32 @@
   async function abortToLobby(){
     if(!(state.isHost && state.started)) return;
     
-    console.log('Aborting race and resetting all players ready state');
+    console.log('=== ABORT TO LOBBY START ===');
+    console.log('Before abort - me.ready:', state.me.ready, 'me.saved:', state.me.saved);
     
     if(state.net && state.lobbyCode){
+      console.log('Updating Firebase lobby state...');
+      
       // ロビー状態をリセット
-      await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null });
+      await R('lobbies/'+state.lobbyCode).update({ 
+        started: false, 
+        abandoned: null 
+      });
       await R('lobbies/'+state.lobbyCode+'/state').remove();
       
-      // 全員の準備状態を強制的にリセット
-      const updates = {};
-      Object.keys(state.players).forEach(playerId => {
-        updates[`lobbies/${state.lobbyCode}/players/${playerId}/ready`] = false;
-      });
-      if(Object.keys(updates).length > 0) {
-        await R('').update(updates);
+      console.log('Resetting all players ready state...');
+      
+      // 全員の準備状態を強制的にリセット（個別に更新）
+      const playerIds = Object.keys(state.players);
+      for(const playerId of playerIds) {
+        await R(`lobbies/${state.lobbyCode}/players/${playerId}`).update({
+          ready: false,
+          updatedAt: Date.now()
+        });
+        console.log(`Reset ready state for player: ${playerId}`);
       }
+      
+      console.log('Firebase updates completed');
     }
     
     // ローカル状態のリセット
@@ -1120,18 +1131,26 @@
     state.me.ready = false;
     state.me.saved = false; // 保存状態もリセット
     
-    console.log('Local state reset, me.ready:', state.me.ready, 'me.saved:', state.me.saved);
+    console.log('After local reset - me.ready:', state.me.ready, 'me.saved:', state.me.saved);
     
+    // UI更新
     updateReadyButton();
+    updateReadyButtonState();
+    
+    // 新しい気分で再保存
     await upsertMe(true); // 新しい気分を生成
     
+    // シミュレーションリセット
     sim.reset(); 
     if(state.ctx) drawRace();
+    
+    // ボタン状態更新
     applyLockState(); 
     updateButtonsState(); 
     updateStartVisibility();
     
-    console.log('Abort completed, me.ready:', state.me.ready, 'me.saved:', state.me.saved);
+    console.log('Final state - me.ready:', state.me.ready, 'me.saved:', state.me.saved);
+    console.log('=== ABORT TO LOBBY END ===');
   }
 
   function subscribeLobby(code){ 
@@ -1139,6 +1158,14 @@
     
     R('lobbies/'+code).on('value', snap=>{
       const v=snap.val()||{};
+      
+      // ロビーが存在しない場合（削除された場合）
+      if(!v || Object.keys(v).length === 0) {
+        console.log('Lobby does not exist or was deleted, resetting state');
+        resetLobbyState();
+        return;
+      }
+      
       state.lobby=v; 
       state.started=!!v.started; 
       state.seed=v.seed||0; 
@@ -1164,6 +1191,14 @@
     R('lobbies/'+code+'/players').on('value', snap=>{
       const players = snap.val()||{};
       const oldPlayers = state.players || {};
+      
+      // プレイヤーリストが空の場合
+      if(Object.keys(players).length === 0) {
+        console.log('No players in lobby, scheduling cleanup');
+        checkAndCleanupLobby(code, players);
+        return;
+      }
+      
       state.players = players; 
       
       // 自分がロビーから削除された場合の処理
@@ -1171,6 +1206,13 @@
         console.log('Player was removed from lobby, resetting state');
         resetLobbyState();
         return;
+      }
+      
+      // Firebase上で自分の準備状態が変更された場合、ローカル状態も同期
+      if(players[uid] && state.me.ready !== players[uid].ready) {
+        console.log('Syncing ready state from Firebase:', players[uid].ready);
+        state.me.ready = players[uid].ready;
+        updateReadyButton();
       }
       
       // 新しくプレイヤーが参加した場合、色の重複をチェック
@@ -1220,40 +1262,41 @@
     });
   }
 
-  // ロビー自動削除機能（強化版）
+  // ロビー自動削除機能（完全版）
   function checkAndCleanupLobby(code, players) {
     if(!state.net || !code) return;
     
     const playerCount = Object.keys(players).length;
+    console.log(`Checking lobby ${code}, player count: ${playerCount}`);
     
     if(playerCount === 0) {
-      // 誰もいない場合、10秒後に削除予約（短縮）
+      // 誰もいない場合、5秒後に削除予約（さらに短縮）
       if(!state.emptyLobbyTimeout) {
-        console.log(`Lobby ${code} is empty, scheduling deletion in 10 seconds`);
+        console.log(`Lobby ${code} is empty, scheduling deletion in 5 seconds`);
         state.emptyLobbyTimeout = setTimeout(async () => {
           try {
-            // 10秒後に再度チェック
-            const snapshot = await R('lobbies/'+code+'/players').once('value');
-            const currentPlayers = snapshot.val() || {};
-            const currentPlayerCount = Object.keys(currentPlayers).length;
+            console.log(`Attempting to delete empty lobby ${code}`);
             
-            if(currentPlayerCount === 0) {
-              // まだ誰もいなければロビー全体を削除
-              await R('lobbies/'+code).remove();
-              console.log(`Empty lobby ${code} has been automatically deleted`);
-              
-              // 自分がそのロビーにいた場合は状態をリセット
-              if(state.lobbyCode === code) {
-                await resetLobbyState();
-              }
-            } else {
-              console.log(`Lobby ${code} has players again, deletion cancelled`);
+            // ロビー全体を強制削除
+            await R('lobbies/'+code).remove();
+            console.log(`Empty lobby ${code} has been deleted successfully`);
+            
+            // 自分がそのロビーにいた場合は状態をリセット
+            if(state.lobbyCode === code) {
+              console.log('Resetting own state due to lobby deletion');
+              await resetLobbyState();
             }
           } catch(e) {
-            console.warn('Failed to cleanup empty lobby:', e);
+            console.error('Failed to cleanup empty lobby:', e);
+            // エラーが発生した場合もリトライ
+            setTimeout(() => {
+              if(state.lobbyCode === code) {
+                checkAndCleanupLobby(code, {});
+              }
+            }, 5000);
           }
           state.emptyLobbyTimeout = null;
-        }, 10000); // 10秒に短縮
+        }, 5000); // 5秒に短縮
       }
     } else {
       // 誰かがいる場合、削除予約をキャンセル
@@ -1265,8 +1308,17 @@
     }
   }
 
-  // ロビー状態のリセット
+  // ロビー状態のリセット（強化版）
   async function resetLobbyState() {
+    console.log('Resetting lobby state completely');
+    
+    // タイマーをクリア
+    if(state.emptyLobbyTimeout) {
+      clearTimeout(state.emptyLobbyTimeout);
+      state.emptyLobbyTimeout = null;
+    }
+    
+    // 状態を完全リセット
     state.lobbyCode = null;
     state.isHost = false;
     state.players = {};
@@ -1279,31 +1331,69 @@
     // UI更新
     $.code.textContent = '-';
     $.who.textContent = '未接続';
+    $.count.textContent = '';
+    
     renderPlayers();
     buildLanesFromPlayers();
     renderResults();
     updateStartVisibility();
     updateRoleUI();
     updateReadyButton();
+    updateReadyButtonState();
+    
+    // シミュレーションもリセット
+    sim.reset();
+    if(state.ctx) drawRace();
+    
+    // URLも更新
     history.replaceState(null, '', location.pathname);
+    
+    console.log('Lobby state reset completed');
   }
 
   async function leaveLobby(){ 
+    console.log('=== LEAVING LOBBY ===');
+    
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
       clearTimeout(state.emptyLobbyTimeout);
       state.emptyLobbyTimeout = null;
     }
     
-    if(state.net && state.lobbyCode){ 
-      await R('lobbies/'+state.lobbyCode+'/players/'+uid).remove(); 
+    const currentLobbyCode = state.lobbyCode;
+    
+    if(state.net && currentLobbyCode){ 
+      console.log('Removing player from Firebase...');
+      await R('lobbies/'+currentLobbyCode+'/players/'+uid).remove(); 
+      
       if(state.isHost && state.started){ 
+        console.log('Host leaving during race, abandoning...');
         await abandonRace('host_left'); 
       } 
+      
+      // 離脱後に即座にロビーの削除チェック
+      setTimeout(async () => {
+        try {
+          const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
+          const remainingPlayers = snapshot.val() || {};
+          const playerCount = Object.keys(remainingPlayers).length;
+          
+          console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
+          
+          if(playerCount === 0) {
+            console.log('No players remaining, deleting lobby immediately');
+            await R('lobbies/'+currentLobbyCode).remove();
+            console.log(`Lobby ${currentLobbyCode} deleted successfully`);
+          }
+        } catch(e) {
+          console.error('Error checking lobby after leaving:', e);
+        }
+      }, 1000);
     } 
     
     // 状態リセット
     await resetLobbyState();
+    console.log('=== LOBBY LEFT ===');
   }
 
   const sim = {
@@ -1682,12 +1772,12 @@
       }
       
       // プレイヤー名と周回数を馬の近くに表示
-      if(p?.name) {
+      if(p?.horse?.name) {
         ctx.fillStyle = 'rgba(255,255,255,.9)';
         const fontSize = isSmall ? 10*dpr : 12*dpr;
         ctx.font = `${fontSize}px system-ui`;
         ctx.textAlign = 'center';
-        const nameText = `${p.name} (${laps}/${totalLaps})`;
+        const nameText = `${p.horse.name} (${laps}/${totalLaps})`; // 馬の名前を表示
         const nameWidth = ctx.measureText(nameText).width;
         
         // 名前の背景

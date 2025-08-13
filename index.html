@@ -1451,6 +1451,7 @@
     // Firebaseリスナーをクリア
     cleanupLobbyListeners();
     
+    // ローカルストレージをクリア（確実に削除）
     localStorage.removeItem('hostLobby');
     localStorage.removeItem('hostId');
     
@@ -1478,7 +1479,10 @@
     sim.reset();
     if(state.ctx) drawRace();
     
+    // URLもクリア
     history.replaceState(null, '', location.pathname);
+    
+    console.log('Lobby state completely reset, localStorage cleared');
   }
 
   async function leaveLobby(){ 
@@ -1489,16 +1493,24 @@
     }
     
     const currentLobbyCode = state.lobbyCode;
+    const wasHost = state.isHost;
     
     if(state.net && currentLobbyCode){ 
       await R('lobbies/'+currentLobbyCode+'/players/'+uid).remove(); 
       
-      if(state.isHost && state.started){ 
+      if(wasHost && state.started){ 
         await R('lobbies/'+currentLobbyCode).update({ 
           started:false, 
           abandoned:{ at:Date.now(), reason:'host_left' } 
         });
       } 
+      
+      // ホストの場合、ローカルストレージをクリア
+      if(wasHost) {
+        console.log('Host leaving, clearing localStorage');
+        localStorage.removeItem('hostLobby');
+        localStorage.removeItem('hostId');
+      }
       
       // 離脱後に即座にロビーの削除チェック
       setTimeout(async () => {
@@ -2221,11 +2233,36 @@
   }
 
   // URLから自動参加
-  (function autoJoin(){ 
+  (async function autoJoin(){ 
     const q=new URLSearchParams(location.search); 
     const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); 
     if(room){ 
-      joinLobby(room.padStart(4,'0')); 
+      const roomCode = room.padStart(4,'0');
+      console.log('Auto-joining room from URL:', roomCode);
+      
+      // ネットワーク接続がある場合、ロビーの存在確認
+      if(state.net) {
+        try {
+          const lobbySnapshot = await R('lobbies/'+roomCode).once('value');
+          if(lobbySnapshot.exists()) {
+            console.log('Lobby exists, proceeding with auto-join');
+            await joinLobby(roomCode);
+          } else {
+            console.log('Lobby in URL does not exist, clearing URL');
+            // URLのロビーコードを削除
+            history.replaceState(null, '', location.pathname);
+            updateRoleUI();
+          }
+        } catch(e) {
+          console.error('Error checking lobby from URL:', e);
+          // エラーの場合もURLをクリア
+          history.replaceState(null, '', location.pathname);
+          updateRoleUI();
+        }
+      } else {
+        // ネットワークがない場合はそのまま参加試行
+        await joinLobby(roomCode);
+      }
     } else { 
       updateRoleUI(); 
     } 

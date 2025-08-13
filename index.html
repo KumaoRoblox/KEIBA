@@ -786,6 +786,52 @@
     }
   }
 
+  // メッセージ表示機能
+  function showMessage(text, type = 'info') {
+    // 既存のメッセージがあれば削除
+    const existingMessage = document.getElementById('gameMessage');
+    if(existingMessage) {
+      existingMessage.remove();
+    }
+    
+    const message = document.createElement('div');
+    message.id = 'gameMessage';
+    message.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 16px;
+      z-index: 1000;
+      animation: messageSlide 0.3s ease-out;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    `;
+    
+    if(type === 'success') {
+      message.style.background = 'linear-gradient(135deg, #4CAF50, #45a049)';
+      message.style.color = 'white';
+      message.style.border = '2px solid #45a049';
+    } else if(type === 'info') {
+      message.style.background = 'linear-gradient(135deg, #2196F3, #1976D2)';
+      message.style.color = 'white';
+      message.style.border = '2px solid #1976D2';
+    }
+    
+    message.textContent = text;
+    document.body.appendChild(message);
+    
+    // 3秒後に自動削除
+    setTimeout(() => {
+      if(message && message.parentNode) {
+        message.style.animation = 'messageSlideOut 0.3s ease-in';
+        setTimeout(() => message.remove(), 300);
+      }
+    }, 3000);
+  }
+
   // 出馬表表示機能
   async function showStartingLineup() {
     // オーバーレイ作成
@@ -878,6 +924,9 @@
       `;
       horseName.textContent = `🐎 ${player.horse?.name || '名無し'}`;
       
+      textInfo.appendChild(playerName);
+      textInfo.appendChild(horseName);
+      
       // 気分表示
       if(player.horse?.mood) {
         const moodInfo = document.createElement('div');
@@ -888,9 +937,6 @@
         moodInfo.textContent = `${player.horse.mood.emoji} ${player.horse.mood.name}`;
         textInfo.appendChild(moodInfo);
       }
-      
-      textInfo.appendChild(playerName);
-      textInfo.appendChild(horseName);
       
       horseCard.appendChild(colorBox);
       horseCard.appendChild(textInfo);

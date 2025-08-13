@@ -589,7 +589,8 @@
     racePlayerIds:[],
     abandoned:null,
     loading:false,
-    emptyLobbyTimeout:null
+    emptyLobbyTimeout:null,
+    lobbyListeners:[] // Firebaseリスナーを管理
   };
 
   const $ = {
@@ -1045,10 +1046,25 @@
     state.me.saved = true;
     
     if(state.net && state.lobbyCode){
-      await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ 
-        name, horse, updatedAt:Date.now(), ready:state.me.ready||false 
-      });
-      ensurePresence();
+      // 削除されたロビーに書き込まないよう事前チェック
+      try {
+        const lobbySnapshot = await R('lobbies/'+state.lobbyCode).once('value');
+        if(!lobbySnapshot.exists()) {
+          console.log('Lobby no longer exists, not updating player data');
+          state.loading = false;
+          resetLobbyState();
+          return;
+        }
+        
+        await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ 
+          name, horse, updatedAt:Date.now(), ready:state.me.ready||false 
+        });
+        ensurePresence();
+      } catch(e) {
+        console.error('Failed to update player data:', e);
+        state.loading = false;
+        return;
+      }
     } else {
       state.players[uid]={ name, horse, ready:state.me.ready||false };
       renderPlayers(); 
@@ -1284,11 +1300,21 @@
   async function subscribeLobby(code){ 
     if(!state.net) return;
     
-    R('lobbies/'+code).on('value', snap=>{
+    // 既存のリスナーをクリア
+    cleanupLobbyListeners();
+    
+    const lobbyRef = R('lobbies/'+code);
+    const playersRef = R('lobbies/'+code+'/players');
+    const stateRef = R('lobbies/'+code+'/state');
+    const resultsRef = R('lobbies/'+code+'/results');
+    
+    // ロビー情報の監視
+    const lobbyListener = lobbyRef.on('value', snap=>{
       const v=snap.val()||{};
       
       if(!v || Object.keys(v).length === 0) {
         console.log('Lobby deleted, resetting state');
+        cleanupLobbyListeners(); // リスナーをクリア
         resetLobbyState();
         return;
       }
@@ -1337,7 +1363,8 @@
       updateStartVisibility();
     });
     
-    R('lobbies/'+code+'/players').on('value', snap=>{
+    // プレイヤー情報の監視
+    const playersListener = playersRef.on('value', snap=>{
       const players = snap.val()||{};
       const oldPlayers = state.players || {};
       
@@ -1351,6 +1378,7 @@
       state.players = players; 
       
       if(!players[uid] && oldPlayers[uid]) {
+        cleanupLobbyListeners(); // リスナーをクリア
         resetLobbyState();
         return;
       }
@@ -1380,14 +1408,37 @@
       }
     });
     
-    R('lobbies/'+code+'/state').on('value', snap=>{ 
+    // レース状態の監視
+    const stateListener = stateRef.on('value', snap=>{ 
       state.lastState=snap.val()||null; 
     });
     
-    R('lobbies/'+code+'/results').on('value', snap=>{ 
+    // 結果の監視
+    const resultsListener = resultsRef.on('value', snap=>{ 
       state.results=snap.val()||[]; 
       renderResults(); 
     });
+    
+    // リスナーを記録
+    state.lobbyListeners = [
+      { ref: lobbyRef, listener: lobbyListener },
+      { ref: playersRef, listener: playersListener },
+      { ref: stateRef, listener: stateListener },
+      { ref: resultsRef, listener: resultsListener }
+    ];
+  }
+
+  // Firebaseリスナーのクリーンアップ
+  function cleanupLobbyListeners() {
+    if(state.lobbyListeners && state.lobbyListeners.length > 0) {
+      console.log('Cleaning up Firebase listeners');
+      state.lobbyListeners.forEach(item => {
+        if(item.ref && item.listener) {
+          item.ref.off('value', item.listener);
+        }
+      });
+      state.lobbyListeners = [];
+    }
   }
 
   function resetLobbyState() {
@@ -1396,6 +1447,9 @@
       clearTimeout(state.emptyLobbyTimeout);
       state.emptyLobbyTimeout = null;
     }
+    
+    // Firebaseリスナーをクリア
+    cleanupLobbyListeners();
     
     localStorage.removeItem('hostLobby');
     localStorage.removeItem('hostId');

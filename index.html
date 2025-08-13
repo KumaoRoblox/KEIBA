@@ -588,7 +588,8 @@
     totalLaps:3, raceTitle:"みんなで競馬",
     racePlayerIds:[],
     abandoned:null,
-    loading:false
+    loading:false,
+    emptyLobbyTimeout:null
   };
 
   const $ = {
@@ -688,9 +689,113 @@
       state.net=true;
       firebase.auth().signInAnonymously().catch(console.error);
       $.onlineBadge.textContent='オンライン有効（Firebase）';
+      
+      // Firebase初期化後にロビー掃除を開始
+      startLobbyCleanupScheduler();
     }catch(e){ console.error(e); $.onlineBadge.textContent='オフライン（初期化エラー）'; }
   }
   initFirebase();
+
+  // ロビー自動削除機能
+  function checkAndCleanupLobby(code, players) {
+    if(!state.net || !code) return;
+    
+    const playerCount = Object.keys(players).length;
+    console.log(`Checking lobby ${code}, player count: ${playerCount}`);
+    
+    if(playerCount === 0) {
+      // 誰もいない場合、3秒後に削除
+      if(!state.emptyLobbyTimeout) {
+        console.log(`Lobby ${code} is empty, scheduling deletion in 3 seconds`);
+        state.emptyLobbyTimeout = setTimeout(async () => {
+          try {
+            // 再度確認してから削除
+            const snapshot = await R('lobbies/'+code+'/players').once('value');
+            const currentPlayers = snapshot.val() || {};
+            const currentPlayerCount = Object.keys(currentPlayers).length;
+            
+            if(currentPlayerCount === 0) {
+              console.log(`Force deleting empty lobby ${code}`);
+              await forceDeleteLobby(code);
+              
+              // 自分がそのロビーにいた場合は状態をリセット
+              if(state.lobbyCode === code) {
+                console.log('Resetting own state due to lobby deletion');
+                resetLobbyState();
+              }
+            } else {
+              console.log(`Lobby ${code} now has ${currentPlayerCount} players, deletion cancelled`);
+            }
+          } catch(e) {
+            console.error('Failed to cleanup empty lobby:', e);
+          }
+          state.emptyLobbyTimeout = null;
+        }, 3000); // 3秒で削除
+      }
+    } else {
+      // 誰かがいる場合、削除予約をキャンセル
+      if(state.emptyLobbyTimeout) {
+        console.log(`Lobby ${code} has players, deletion cancelled`);
+        clearTimeout(state.emptyLobbyTimeout);
+        state.emptyLobbyTimeout = null;
+      }
+    }
+  }
+
+  // ロビー強制削除機能
+  async function forceDeleteLobby(code) {
+    if(!state.net || !code) return;
+    
+    try {
+      console.log(`Force deleting lobby ${code} and all its data`);
+      
+      // 個別に全て削除
+      await R('lobbies/'+code+'/players').remove();
+      await R('lobbies/'+code+'/state').remove();
+      await R('lobbies/'+code+'/results').remove();
+      await R('lobbies/'+code).remove();
+      
+      console.log(`Lobby ${code} and all associated data deleted`);
+    } catch(e) {
+      console.error('Force delete failed:', e);
+    }
+  }
+
+  // 定期的なロビー掃除機能
+  function startLobbyCleanupScheduler() {
+    if(!state.net) return;
+    
+    // 10分ごとに古いロビーをチェック
+    setInterval(async () => {
+      try {
+        console.log('Running scheduled lobby cleanup...');
+        
+        const snapshot = await R('lobbies').once('value');
+        const lobbies = snapshot.val() || {};
+        
+        const now = Date.now();
+        const oneHourAgo = now - (60 * 60 * 1000); // 1時間前
+        
+        for(const [lobbyCode, lobbyData] of Object.entries(lobbies)) {
+          if(!lobbyData) continue;
+          
+          const createdAt = lobbyData.createdAt || 0;
+          const players = lobbyData.players || {};
+          const playerCount = Object.keys(players).length;
+          
+          // 1時間以上経過したロビーまたは空のロビーを削除
+          if(createdAt < oneHourAgo || playerCount === 0) {
+            console.log(`Cleaning up old/empty lobby: ${lobbyCode}`);
+            await forceDeleteLobby(lobbyCode);
+          }
+        }
+        
+        console.log('Scheduled lobby cleanup completed');
+      } catch(e) {
+        console.error('Scheduled cleanup failed:', e);
+      }
+    }, 10 * 60 * 1000); // 10分間隔
+  }
 
   const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
   const R=(path)=> state.db?state.db.ref(path):null;
@@ -1205,8 +1310,13 @@
       state.abandoned=v.abandoned||null;
       
       // レース設定の同期（ホストの設定を他の参加者にも反映）
-      if($.totalLaps) $.totalLaps.value = state.totalLaps;
-      if($.raceTitle) $.raceTitle.value = state.raceTitle;
+      // 入力中でない場合のみ値を上書き（フォーカスされていない場合）
+      if($.totalLaps && document.activeElement !== $.totalLaps) {
+        $.totalLaps.value = state.totalLaps;
+      }
+      if($.raceTitle && document.activeElement !== $.raceTitle) {
+        $.raceTitle.value = state.raceTitle;
+      }
       if($.raceHeader) $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
       
       if(!state.isHost && !wasStarted && state.started) {
@@ -1229,12 +1339,18 @@
     
     R('lobbies/'+code+'/players').on('value', snap=>{
       const players = snap.val()||{};
+      const oldPlayers = state.players || {};
       
-      if(Object.keys(players).length === 0) return;
+      // プレイヤーリストが空の場合、ロビー削除をスケジュール
+      if(Object.keys(players).length === 0) {
+        console.log('No players in lobby, scheduling cleanup');
+        checkAndCleanupLobby(code, players);
+        return;
+      }
       
       state.players = players; 
       
-      if(!players[uid]) {
+      if(!players[uid] && oldPlayers[uid]) {
         resetLobbyState();
         return;
       }
@@ -1249,6 +1365,9 @@
       buildLanesFromPlayers(); 
       updateRoleUI(); 
       updateStartVisibility();
+      
+      // プレイヤー数チェックと自動削除処理
+      checkAndCleanupLobby(code, players);
       
       if(state.isHost && state.started && state.racePlayerIds.length){
         const nowIds=new Set(Object.keys(players));
@@ -1272,6 +1391,12 @@
   }
 
   function resetLobbyState() {
+    // タイマーをクリア
+    if(state.emptyLobbyTimeout) {
+      clearTimeout(state.emptyLobbyTimeout);
+      state.emptyLobbyTimeout = null;
+    }
+    
     localStorage.removeItem('hostLobby');
     localStorage.removeItem('hostId');
     
@@ -1303,6 +1428,12 @@
   }
 
   async function leaveLobby(){ 
+    // タイマーをクリア
+    if(state.emptyLobbyTimeout) {
+      clearTimeout(state.emptyLobbyTimeout);
+      state.emptyLobbyTimeout = null;
+    }
+    
     const currentLobbyCode = state.lobbyCode;
     
     if(state.net && currentLobbyCode){ 
@@ -1314,6 +1445,30 @@
           abandoned:{ at:Date.now(), reason:'host_left' } 
         });
       } 
+      
+      // 離脱後に即座にロビーの削除チェック
+      setTimeout(async () => {
+        try {
+          const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
+          const remainingPlayers = snapshot.val() || {};
+          const playerCount = Object.keys(remainingPlayers).length;
+          
+          console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
+          
+          if(playerCount === 0) {
+            console.log('No players remaining, force deleting lobby');
+            await forceDeleteLobby(currentLobbyCode);
+          }
+        } catch(e) {
+          console.error('Error checking lobby after leaving:', e);
+          // エラーでも強制削除を試行
+          try {
+            await forceDeleteLobby(currentLobbyCode);
+          } catch(e2) {
+            console.error('Force delete also failed:', e2);
+          }
+        }
+      }, 500); // 0.5秒後に実行
     } 
     
     resetLobbyState();
@@ -1968,12 +2123,32 @@
   if($.raceTitle) {
     $.raceTitle.addEventListener('input', () => {
       if(!state.isHost) return; // ホストのみ変更可能
-      state.raceTitle = $.raceTitle.value.trim() || 'みんなで競馬';
-      $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
       
-      // Firebaseに即座に同期（ホストのみ）
+      // 空文字の場合はデフォルト値を設定しない（入力中を考慮）
+      const inputValue = $.raceTitle.value;
+      state.raceTitle = inputValue || 'みんなで競馬'; // 空の場合のみデフォルト
+      
+      // ヘッダーは常に何かしらの値を表示（空の場合はデフォルト）
+      const displayTitle = inputValue || 'みんなで競馬';
+      $.raceHeader.textContent = `${displayTitle} (${state.totalLaps}周制)`;
+      
+      // Firebaseに同期（空文字でも同期して、他の参加者の入力フィールドも同期）
       if(state.net && state.lobbyCode) {
-        R('lobbies/'+state.lobbyCode).update({ raceTitle: state.raceTitle });
+        R('lobbies/'+state.lobbyCode).update({ raceTitle: inputValue || 'みんなで競馬' });
+      }
+    });
+    
+    // フォーカスが外れた時に空文字だったらデフォルト値を設定
+    $.raceTitle.addEventListener('blur', () => {
+      if(!state.isHost) return;
+      if(!$.raceTitle.value.trim()) {
+        $.raceTitle.value = 'みんなで競馬';
+        state.raceTitle = 'みんなで競馬';
+        $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
+        
+        if(state.net && state.lobbyCode) {
+          R('lobbies/'+state.lobbyCode).update({ raceTitle: state.raceTitle });
+        }
       }
     });
   }

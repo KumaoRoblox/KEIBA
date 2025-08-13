@@ -681,6 +681,8 @@
   syncLabels();
 
   // Firebase初期化
+  let firebaseInitialized = false;
+  
   function initFirebase(){
     if(typeof window.firebase==='undefined'){ $.onlineBadge.textContent='オフライン（SDK未読込）'; return; }
     if(!firebaseConfig || !firebaseConfig.apiKey){ $.onlineBadge.textContent='オフライン（デモ）'; return; }
@@ -688,13 +690,29 @@
       state.app=firebase.initializeApp(firebaseConfig);
       state.db=firebase.database();
       state.net=true;
-      firebase.auth().signInAnonymously().catch(console.error);
+      firebase.auth().signInAnonymously().then(() => {
+        firebaseInitialized = true;
+        console.log('Firebase initialized successfully');
+      }).catch(console.error);
       $.onlineBadge.textContent='オンライン有効（Firebase）';
       
       // Firebase初期化後にロビー掃除を開始
       startLobbyCleanupScheduler();
     }catch(e){ console.error(e); $.onlineBadge.textContent='オフライン（初期化エラー）'; }
   }
+  
+  // Firebase初期化を待つ関数
+  async function waitForFirebase() {
+    if(!state.net) return true; // オフラインの場合はすぐに完了
+    
+    let attempts = 0;
+    while(!firebaseInitialized && attempts < 50) { // 最大5秒待機
+      await sleep(100);
+      attempts++;
+    }
+    return firebaseInitialized;
+  }
+  
   initFirebase();
 
   // ロビー自動削除機能
@@ -1050,7 +1068,19 @@
       try {
         const lobbySnapshot = await R('lobbies/'+state.lobbyCode).once('value');
         if(!lobbySnapshot.exists()) {
-          console.log('Lobby no longer exists, not updating player data');
+          console.log('Lobby no longer exists during upsertMe, resetting state');
+          state.loading = false;
+          resetLobbyState();
+          return;
+        }
+        
+        // さらに、自分がプレイヤーとして参加可能かチェック
+        const playersSnapshot = await R('lobbies/'+state.lobbyCode+'/players').once('value');
+        const players = playersSnapshot.val() || {};
+        
+        // ロビーが存在するが、自分以外のプレイヤーがいない場合で、自分がホストでない場合は参加しない
+        if(Object.keys(players).length === 0 && !state.isHost) {
+          console.log('Lobby exists but has no players and user is not host, not joining');
           state.loading = false;
           resetLobbyState();
           return;
@@ -1063,6 +1093,7 @@
       } catch(e) {
         console.error('Failed to update player data:', e);
         state.loading = false;
+        resetLobbyState();
         return;
       }
     } else {
@@ -2234,8 +2265,21 @@
 
   // URLから自動参加
   (async function autoJoin(){ 
+    console.log('Auto-join process starting...');
+    
+    // Firebase初期化を待つ
+    if(state.net) {
+      const initialized = await waitForFirebase();
+      if(!initialized) {
+        console.error('Firebase initialization timeout during auto-join');
+        updateRoleUI();
+        return;
+      }
+    }
+    
     const q=new URLSearchParams(location.search); 
     const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); 
+    
     if(room){ 
       const roomCode = room.padStart(4,'0');
       console.log('Auto-joining room from URL:', roomCode);
@@ -2248,15 +2292,24 @@
             console.log('Lobby exists, proceeding with auto-join');
             await joinLobby(roomCode);
           } else {
-            console.log('Lobby in URL does not exist, clearing URL');
+            console.log('Lobby in URL does not exist, clearing URL and localStorage');
             // URLのロビーコードを削除
             history.replaceState(null, '', location.pathname);
+            // 関連するローカルストレージも削除
+            const savedHostLobby = localStorage.getItem('hostLobby');
+            if(savedHostLobby === roomCode) {
+              localStorage.removeItem('hostLobby');
+              localStorage.removeItem('hostId');
+              console.log('Cleared localStorage for non-existent lobby');
+            }
             updateRoleUI();
           }
         } catch(e) {
           console.error('Error checking lobby from URL:', e);
-          // エラーの場合もURLをクリア
+          // エラーの場合もURLとローカルストレージをクリア
           history.replaceState(null, '', location.pathname);
+          localStorage.removeItem('hostLobby');
+          localStorage.removeItem('hostId');
           updateRoleUI();
         }
       } else {
@@ -2264,6 +2317,23 @@
         await joinLobby(roomCode);
       }
     } else { 
+      // URLにロビーコードがない場合、孤立したローカルストレージをチェック
+      const savedHostLobby = localStorage.getItem('hostLobby');
+      if(savedHostLobby && state.net) {
+        console.log('Found orphaned host lobby in localStorage, checking if it exists:', savedHostLobby);
+        try {
+          const lobbySnapshot = await R('lobbies/'+savedHostLobby).once('value');
+          if(!lobbySnapshot.exists()) {
+            console.log('Orphaned lobby does not exist, clearing localStorage');
+            localStorage.removeItem('hostLobby');
+            localStorage.removeItem('hostId');
+          }
+        } catch(e) {
+          console.error('Error checking orphaned lobby:', e);
+          localStorage.removeItem('hostLobby');
+          localStorage.removeItem('hostId');
+        }
+      }
       updateRoleUI(); 
     } 
   })();

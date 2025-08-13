@@ -496,7 +496,8 @@
     racePlayerIds:[],
     abandoned:null,
     emptyLobbyTimeout:null, // 空ロビー削除用タイマー
-    moodUpdatedForAbandoned:false // 中断時の気分更新フラグ
+    moodUpdatedForAbandoned:false, // 中断時の気分更新フラグ
+    loading:false // ローディング状態フラグ
   };
 
   const $ = {
@@ -534,9 +535,11 @@
       $.save.style.opacity = remaining !== 0 ? '0.5' : '1';
     }
     
-    // 設定が変更されたら保存状態をリセット
-    state.me.saved = false;
-    updateReadyButtonState();
+    // 設定が変更されたら保存状態をリセット（手動変更時のみ）
+    if(!state.loading) { // loading中は保存状態をリセットしない
+      state.me.saved = false;
+      updateReadyButtonState();
+    }
   }
   
   // 準備ボタンの状態更新
@@ -546,8 +549,13 @@
       $.ready.disabled = !canReady;
       $.ready.style.opacity = canReady ? '1' : '0.5';
       
-      // デバッグ用ログ（必要に応じて削除）
-      console.log('Ready button state:', { saved: state.me.saved, started: state.started, canReady });
+      // デバッグ用ログ
+      console.log('Ready button state:', { 
+        saved: state.me.saved, 
+        started: state.started, 
+        canReady: canReady,
+        readyDisabled: $.ready.disabled 
+      });
     }
   }
   
@@ -557,6 +565,13 @@
       slider.addEventListener('input', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        
+        // ユーザーによる手動変更の場合のみ保存状態をリセット
+        if(!state.loading) {
+          console.log('User changed settings, resetting saved state');
+          state.me.saved = false;
+        }
+        
         syncLabels();
         if(state.me.ready) setReady(false);
       });
@@ -800,6 +815,10 @@
 
   async function upsertMe(newMood = false){
     if(state.started){ ensurePresence(); return; }
+    
+    // ローディング開始
+    state.loading = true;
+    
     const name=$.pName.value.trim()||`Player-${uid.slice(0,4).toUpperCase()}`;
     let horse=collectHorse(newMood); // 新しい気分フラグを渡す
     
@@ -814,7 +833,7 @@
     
     // 保存状態を更新
     state.me.saved = true;
-    updateReadyButtonState();
+    console.log('Settings saved, state.me.saved:', state.me.saved);
     
     if(state.net && state.lobbyCode){
       await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ name, horse, updatedAt:Date.now(), ready:state.me.ready||false });
@@ -823,6 +842,12 @@
       state.players[uid]={ name, horse, ready:state.me.ready||false };
       renderPlayers(); buildLanesFromPlayers(); updateStartVisibility();
     }
+    
+    // ローディング終了
+    state.loading = false;
+    
+    // UI更新
+    updateReadyButtonState();
     
     // 設定保存メッセージを表示（newMoodがfalseの場合のみ）
     if(!newMood) {
@@ -1111,7 +1136,12 @@
       state.trackLen=v.trackLen||400; 
       state.totalLaps=v.totalLaps||3;
       state.abandoned=v.abandoned||null;
+      
+      // ローディング状態で設定を更新
+      state.loading = true;
       syncLabels(); 
+      state.loading = false;
+      
       applyLockState(); 
       updateButtonsState();
       if(state.abandoned){ 
@@ -1135,8 +1165,10 @@
           const currentColor = $.hColor.value;
           const newColor = uniqueColor(currentColor, true);
           if(currentColor !== newColor) {
+            state.loading = true; // 色変更はローディング状態で行う
             $.hColor.value = newColor;
             $.colorBox.style.background = newColor;
+            state.loading = false;
             // 色が変更された場合は自動で再保存
             upsertMe(false);
           }

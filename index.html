@@ -304,6 +304,32 @@
     .ok{color:var(--ok)}
     .error{color:var(--bad)}
     .footerNote{font-size:12px; color:var(--muted); padding:0 18px 18px}
+    
+    /* アニメーション */
+    @keyframes messageSlide {
+      from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+      to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+    @keyframes messageSlideOut {
+      from { transform: translateX(-50%) translateY(0); opacity: 1; }
+      to { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    @keyframes titleGlow {
+      from { text-shadow: 2px 2px 4px rgba(0,0,0,0.5), 0 0 10px rgba(255,215,0,0.3); }
+      to { text-shadow: 2px 2px 4px rgba(0,0,0,0.5), 0 0 20px rgba(255,215,0,0.6); }
+    }
+    @keyframes slideIn {
+      from { transform: translateX(-50px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -753,6 +779,137 @@
       state.players[uid]={ name, horse, ready:state.me.ready||false };
       renderPlayers(); buildLanesFromPlayers(); updateStartVisibility();
     }
+    
+    // 設定保存メッセージを表示（newMoodがfalseの場合のみ）
+    if(!newMood) {
+      showMessage('設定が保存されました！', 'success');
+    }
+  }
+
+  // 出馬表表示機能
+  async function showStartingLineup() {
+    // オーバーレイ作成
+    const overlay = document.createElement('div');
+    overlay.id = 'startingLineupOverlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      animation: fadeIn 0.5s ease-out;
+    `;
+    
+    // タイトル
+    const title = document.createElement('div');
+    title.style.cssText = `
+      font-size: 48px;
+      font-weight: bold;
+      color: #FFD700;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+      margin-bottom: 40px;
+      text-align: center;
+      animation: titleGlow 2s ease-in-out infinite alternate;
+    `;
+    title.textContent = '🐎 今回の出走馬たち！ 🐎';
+    
+    // 馬のリスト
+    const horseList = document.createElement('div');
+    horseList.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 600px;
+      width: 90%;
+    `;
+    
+    // 各馬の情報を表示
+    Object.entries(state.players || {}).forEach(([id, player], index) => {
+      const horseCard = document.createElement('div');
+      horseCard.style.cssText = `
+        background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+        border: 2px solid ${player.horse?.color || '#7dd3fc'};
+        border-radius: 15px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        animation: slideIn 0.5s ease-out ${index * 0.2}s both;
+        backdrop-filter: blur(10px);
+      `;
+      
+      // 馬の色表示
+      const colorBox = document.createElement('div');
+      colorBox.style.cssText = `
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: ${player.horse?.color || '#7dd3fc'};
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      `;
+      
+      // テキスト情報
+      const textInfo = document.createElement('div');
+      textInfo.style.cssText = `
+        flex: 1;
+        color: white;
+      `;
+      
+      const playerName = document.createElement('div');
+      playerName.style.cssText = `
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 5px;
+      `;
+      playerName.textContent = player.name || '謎のプレイヤー';
+      
+      const horseName = document.createElement('div');
+      horseName.style.cssText = `
+        font-size: 18px;
+        color: #FFD700;
+        margin-bottom: 8px;
+      `;
+      horseName.textContent = `🐎 ${player.horse?.name || '名無し'}`;
+      
+      // 気分表示
+      if(player.horse?.mood) {
+        const moodInfo = document.createElement('div');
+        moodInfo.style.cssText = `
+          font-size: 16px;
+          color: ${player.horse.mood.color};
+        `;
+        moodInfo.textContent = `${player.horse.mood.emoji} ${player.horse.mood.name}`;
+        textInfo.appendChild(moodInfo);
+      }
+      
+      textInfo.appendChild(playerName);
+      textInfo.appendChild(horseName);
+      
+      horseCard.appendChild(colorBox);
+      horseCard.appendChild(textInfo);
+      horseList.appendChild(horseCard);
+    });
+    
+    overlay.appendChild(title);
+    overlay.appendChild(horseList);
+    document.body.appendChild(overlay);
+    
+    // 3秒後に削除
+    await sleep(3000);
+    
+    overlay.style.animation = 'fadeOut 0.5s ease-in';
+    setTimeout(() => {
+      if(overlay && overlay.parentNode) {
+        overlay.remove();
+      }
+    }, 500);
   }
 
   async function setReady(val){ state.me.ready=!!val; updateReadyButton(); if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ ready:state.me.ready, updatedAt:Date.now() }); } renderPlayers(); updateStartVisibility(); }
@@ -1011,6 +1168,9 @@
       
       updateButtonsState(); 
       applyLockState();
+      
+      // 出馬表の表示
+      await showStartingLineup();
       
       for(let i=3;i>0;i--){ 
         $.count.textContent=String(i); 

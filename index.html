@@ -1,4 +1,8 @@
-<!doctype html>
+// ロビー自動削除機能（超強力版）
+  function checkAndCleanupLobby(code, players) {
+    if(!state.net || !code) return;
+    
+    const playerCount<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
@@ -600,7 +604,14 @@
       $.onlineBadge.textContent='オンライン有効（Firebase）';
     }catch(e){ console.error(e); $.onlineBadge.textContent='オフライン（初期化エラー）'; }
   }
+  // 初期化時にロビー掃除スケジューラーを開始
   initFirebase();
+  
+  // Firebase初期化後にスケジューラーを開始
+  if(state.net) {
+    startLobbyCleanupScheduler();
+    console.log('Lobby cleanup scheduler started');
+  }
 
   const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -1281,7 +1292,7 @@
     });
   }
 
-  // ロビー自動削除機能（完全版）
+  // ロビー自動削除機能（超強力版）
   function checkAndCleanupLobby(code, players) {
     if(!state.net || !code) return;
     
@@ -1289,16 +1300,16 @@
     console.log(`Checking lobby ${code}, player count: ${playerCount}`);
     
     if(playerCount === 0) {
-      // 誰もいない場合、5秒後に削除予約（さらに短縮）
+      // 誰もいない場合、即座に削除
       if(!state.emptyLobbyTimeout) {
-        console.log(`Lobby ${code} is empty, scheduling deletion in 5 seconds`);
+        console.log(`Lobby ${code} is empty, deleting immediately`);
         state.emptyLobbyTimeout = setTimeout(async () => {
           try {
-            console.log(`Attempting to delete empty lobby ${code}`);
+            console.log(`Force deleting empty lobby ${code}`);
             
-            // ロビー全体を強制削除
+            // 強制的にロビー全体を削除
             await R('lobbies/'+code).remove();
-            console.log(`Empty lobby ${code} has been deleted successfully`);
+            console.log(`Empty lobby ${code} has been force deleted`);
             
             // 自分がそのロビーにいた場合は状態をリセット
             if(state.lobbyCode === code) {
@@ -1307,15 +1318,13 @@
             }
           } catch(e) {
             console.error('Failed to cleanup empty lobby:', e);
-            // エラーが発生した場合もリトライ
+            // エラーが発生した場合は再試行
             setTimeout(() => {
-              if(state.lobbyCode === code) {
-                checkAndCleanupLobby(code, {});
-              }
-            }, 5000);
+              forceDeleteLobby(code);
+            }, 2000);
           }
           state.emptyLobbyTimeout = null;
-        }, 5000); // 5秒に短縮
+        }, 1000); // 1秒で削除
       }
     } else {
       // 誰かがいる場合、削除予約をキャンセル
@@ -1325,6 +1334,61 @@
         state.emptyLobbyTimeout = null;
       }
     }
+  }
+
+  // ロビー強制削除機能
+  async function forceDeleteLobby(code) {
+    if(!state.net || !code) return;
+    
+    try {
+      console.log(`Force deleting lobby ${code} and all its data`);
+      
+      // 個別に全て削除
+      await R('lobbies/'+code+'/players').remove();
+      await R('lobbies/'+code+'/state').remove();
+      await R('lobbies/'+code+'/results').remove();
+      await R('lobbies/'+code).remove();
+      
+      console.log(`Lobby ${code} and all associated data deleted`);
+    } catch(e) {
+      console.error('Force delete failed:', e);
+    }
+  }
+
+  // 定期的なロビー掃除機能
+  function startLobbyCleanupScheduler() {
+    if(!state.net) return;
+    
+    // 5分ごとに古いロビーをチェック
+    setInterval(async () => {
+      try {
+        console.log('Running scheduled lobby cleanup...');
+        
+        const snapshot = await R('lobbies').once('value');
+        const lobbies = snapshot.val() || {};
+        
+        const now = Date.now();
+        const oneHourAgo = now - (60 * 60 * 1000); // 1時間前
+        
+        for(const [lobbyCode, lobbyData] of Object.entries(lobbies)) {
+          if(!lobbyData) continue;
+          
+          const createdAt = lobbyData.createdAt || 0;
+          const players = lobbyData.players || {};
+          const playerCount = Object.keys(players).length;
+          
+          // 1時間以上経過したロビーまたは空のロビーを削除
+          if(createdAt < oneHourAgo || playerCount === 0) {
+            console.log(`Cleaning up old/empty lobby: ${lobbyCode}`);
+            await forceDeleteLobby(lobbyCode);
+          }
+        }
+        
+        console.log('Scheduled lobby cleanup completed');
+      } catch(e) {
+        console.error('Scheduled cleanup failed:', e);
+      }
+    }, 5 * 60 * 1000); // 5分間隔
   }
 
   // ロビー状態のリセット（強化版）
@@ -1390,7 +1454,7 @@
         await abandonRace('host_left'); 
       } 
       
-      // 離脱後に即座にロビーの削除チェック
+      // 離脱後に即座にロビーの削除チェック（より確実に）
       setTimeout(async () => {
         try {
           const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
@@ -1400,14 +1464,19 @@
           console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
           
           if(playerCount === 0) {
-            console.log('No players remaining, deleting lobby immediately');
-            await R('lobbies/'+currentLobbyCode).remove();
-            console.log(`Lobby ${currentLobbyCode} deleted successfully`);
+            console.log('No players remaining, force deleting lobby');
+            await forceDeleteLobby(currentLobbyCode);
           }
         } catch(e) {
           console.error('Error checking lobby after leaving:', e);
+          // エラーでも強制削除を試行
+          try {
+            await forceDeleteLobby(currentLobbyCode);
+          } catch(e2) {
+            console.error('Force delete also failed:', e2);
+          }
         }
-      }, 1000);
+      }, 500); // 0.5秒後に実行
     } 
     
     // 状態リセット
@@ -1704,22 +1773,18 @@
         this.physics(dt,noise); 
         sendAcc+=dt; 
         if(sendAcc>0.10 && state.net){ 
-          const pos={}, vel={}, laps={}, totalDist={}, stamina={}, maxStamina={}; 
+          const pos={}, vel={}, laps={}, totalDist={}; 
           Object.values(this.horses).forEach(H=>{
             // NaN値のチェックと修正
             const safeX = isNaN(H.x) ? 0 : H.x;
             const safeV = isNaN(H.v) ? 0 : H.v;
             const safeLaps = isNaN(H.laps) ? 0 : H.laps;
             const safeTotalDistance = isNaN(H.totalDistance) ? 0 : H.totalDistance;
-            const safeStamina = isNaN(H.s) ? 0 : H.s;
-            const safeMaxStamina = isNaN(H.maxS) ? 400 : H.maxS;
             
             pos[H.id] = Math.round(safeX); 
             vel[H.id] = Math.round(safeV * 100) / 100;
             laps[H.id] = safeLaps;
             totalDist[H.id] = Math.round(safeTotalDistance);
-            stamina[H.id] = Math.round(safeStamina);
-            maxStamina[H.id] = Math.round(safeMaxStamina);
           }); 
           const colors={}; 
           Object.values(this.horses).forEach(H=>{ 
@@ -1731,16 +1796,14 @@
           const hasNaN = Object.values(pos).some(v => isNaN(v)) || 
                         Object.values(vel).some(v => isNaN(v)) || 
                         Object.values(laps).some(v => isNaN(v)) || 
-                        Object.values(totalDist).some(v => isNaN(v)) ||
-                        Object.values(stamina).some(v => isNaN(v)) ||
-                        Object.values(maxStamina).some(v => isNaN(v));
+                        Object.values(totalDist).some(v => isNaN(v));
           
           if(!hasNaN) {
             R('lobbies/'+state.lobbyCode+'/state').set({ 
               t:Date.now(), 
               L:state.trackLen, 
               totalLaps:state.totalLaps, 
-              pos, vel, laps, totalDist, stamina, maxStamina, colors 
+              pos, vel, laps, totalDist, colors 
             }); 
           } else {
             console.warn('NaN values detected, skipping Firebase update');

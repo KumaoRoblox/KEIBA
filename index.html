@@ -380,23 +380,28 @@
             <div class="adjustments-container">
               <div class="slider">
                 <div>最高速度</div>
-                <input type="range" id="sTop" min="0" max="100" step="1" value="25">
-                <div><span id="vTop">25</span> pt</div>
+                <input type="range" id="sTop" min="0" max="100" step="1" value="20">
+                <div><span id="vTop">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>加速度</div>
-                <input type="range" id="sAcc" min="0" max="100" step="1" value="25">
-                <div><span id="vAcc">25</span> pt</div>
+                <input type="range" id="sAcc" min="0" max="100" step="1" value="20">
+                <div><span id="vAcc">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>スタミナ</div>
-                <input type="range" id="sSta" min="0" max="100" step="1" value="25">
-                <div><span id="vSta">25</span> pt</div>
+                <input type="range" id="sSta" min="0" max="100" step="1" value="20">
+                <div><span id="vSta">20</span> pt</div>
               </div>
               <div class="slider">
-                <div>運（ゆらぎ）</div>
-                <input type="range" id="sLuck" min="0" max="100" step="1" value="25">
-                <div><span id="vLuck">25</span> pt</div>
+                <div>コーナー</div>
+                <input type="range" id="sCorner" min="0" max="100" step="1" value="20">
+                <div><span id="vCorner">20</span> pt</div>
+              </div>
+              <div class="slider">
+                <div>末脚</div>
+                <input type="range" id="sFinish" min="0" max="100" step="1" value="20">
+                <div><span id="vFinish">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>馬の色</div>
@@ -415,6 +420,8 @@
               <div>・<b>レース中はステータスや色の変更はできません</b>（自動でロック）。</div>
               <div>・<b>誰かが途中で抜けたら試合は放棄</b>（全員に通知）。</div>
               <div>・<b>3周制レース</b>：スタート/ゴール地点を3回通過したらゴール！</div>
+              <div>・<b>新能力</b>：コーナー（カーブでの減速抑制）、末脚（最終直線での爆発力）</div>
+              <div>・<b>スタミナ</b>：少ないと後半大幅失速、多いと持続力アップ</div>
             </div>
           </div>
 
@@ -495,8 +502,8 @@
     code: el('lobbyCode'), who: el('whoami'), hostBadge: el('hostBadge'), onlineBadge: el('onlineBadge'),
     create: el('createLobbyBtn'), joinBtn: el('joinLobbyBtn'), joinCode: el('joinCode'), copy: el('copyCode'),
     pName: el('playerName'), hName: el('horseName'),
-    sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sLuck: el('sLuck'), hColor: el('horseColor'),
-    vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vLuck: el('vLuck'), colorBox: el('colorBox'),
+    sTop: el('sTop'), sAcc: el('sAcc'), sSta: el('sSta'), sCorner: el('sCorner'), sFinish: el('sFinish'), hColor: el('horseColor'),
+    vTop: el('vTop'), vAcc: el('vAcc'), vSta: el('vSta'), vCorner: el('vCorner'), vFinish: el('vFinish'), colorBox: el('colorBox'),
     save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'),
     canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
     leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn'), cfgPreview: el('cfgPreview'),
@@ -507,11 +514,12 @@
     $.vTop.textContent = (+$.sTop.value).toFixed(0);
     $.vAcc.textContent = (+$.sAcc.value).toFixed(0);
     $.vSta.textContent = (+$.sSta.value).toFixed(0);
-    $.vLuck.textContent = (+$.sLuck.value).toFixed(0);
+    $.vCorner.textContent = (+$.sCorner.value).toFixed(0);
+    $.vFinish.textContent = (+$.sFinish.value).toFixed(0);
     $.colorBox.style.background = $.hColor.value;
     
     // 残りポイントを計算
-    const totalUsed = (+$.sTop.value) + (+$.sAcc.value) + (+$.sSta.value) + (+$.sLuck.value);
+    const totalUsed = (+$.sTop.value) + (+$.sAcc.value) + (+$.sSta.value) + (+$.sCorner.value) + (+$.sFinish.value);
     const remaining = 100 - totalUsed;
     
     if($.remainingPoints) {
@@ -527,7 +535,7 @@
   }
   
   // イベントリスナーを個別に設定
-  [$.sTop, $.sAcc, $.sSta, $.sLuck, $.hColor].forEach(slider => {
+  [$.sTop, $.sAcc, $.sSta, $.sCorner, $.sFinish, $.hColor].forEach(slider => {
     if(slider) {
       slider.addEventListener('input', (e) => {
         e.preventDefault();
@@ -667,8 +675,8 @@
       
       // ポイント表示
       const pointsInfo = p.horse?.points ? 
-        `S${p.horse.points.speed} A${p.horse.points.accel} T${p.horse.points.stamina} L${p.horse.points.luck}` :
-        `V${p.horse&&p.horse.topSpeed||'?'} A${p.horse&&p.horse.accel||'?'} S${p.horse&&p.horse.stamina||'?'} L${p.horse&&p.horse.luck||'?'}`;
+        `S${p.horse.points.speed} A${p.horse.points.accel} T${p.horse.points.stamina} C${p.horse.points.corner} F${p.horse.points.finish}` :
+        `V${p.horse&&p.horse.topSpeed||'?'} A${p.horse&&p.horse.accel||'?'} S${p.horse&&p.horse.stamina||'?'} C${p.horse&&p.horse.corner||'?'} F${p.horse&&p.horse.finish||'?'}`;
       
       div.innerHTML=`<div><b>${p.name||'名無し'}</b> <span class="muted">/ ${p.horse&&p.horse.name||'馬'}</span></div>
         <div class="row">${status} ${moodInfo} <span class="badge" style="border-color:${p.horse&&p.horse.color||'#888'}">${p.horse&&p.horse.color||'#888'}</span>
@@ -697,7 +705,8 @@
       // ステータスポイントチェック
       if(player.horse && player.horse.points) {
         const totalPoints = player.horse.points.speed + player.horse.points.accel + 
-                           player.horse.points.stamina + player.horse.points.luck;
+                           player.horse.points.stamina + player.horse.points.corner + 
+                           player.horse.points.finish;
         return totalPoints === 100;
       }
       return true; // 古い形式の場合はそのまま通す
@@ -727,10 +736,11 @@
     }
     
     // ポイントを実際の能力値に変換
-    const topSpeedBase = 5 + (+$.sTop.value) * 0.3; // 5-35 m/s
-    const accelBase = 0.5 + (+$.sAcc.value) * 0.08; // 0.5-8.5 m/s²
-    const staminaBase = 50 + (+$.sSta.value) * 45; // 50-4550
-    const luckBase = (+$.sLuck.value) * 0.03; // 0-3.0
+    const topSpeedBase = 8 + (+$.sTop.value) * 0.25; // 8-33 m/s
+    const accelBase = 0.8 + (+$.sAcc.value) * 0.06; // 0.8-6.8 m/s²
+    const staminaBase = 100 + (+$.sSta.value) * 40; // 100-4100
+    const cornerBase = 0.5 + (+$.sCorner.value) * 0.05; // 0.5-5.5 (コーナー適性)
+    const finishBase = 0.5 + (+$.sFinish.value) * 0.05; // 0.5-5.5 (末脚適性)
     
     return { 
       name: $.hName.value.trim()||'ノーマル', 
@@ -738,14 +748,16 @@
       topSpeed: +(topSpeedBase).toFixed(2), 
       accel: +(accelBase).toFixed(2), 
       stamina: +(staminaBase).toFixed(0), 
-      luck: +(luckBase).toFixed(2),
+      corner: +(cornerBase).toFixed(2),
+      finish: +(finishBase).toFixed(2),
       mood: mood,
       // ポイント値も保存
       points: {
         speed: +$.sTop.value,
         accel: +$.sAcc.value,
         stamina: +$.sSta.value,
-        luck: +$.sLuck.value
+        corner: +$.sCorner.value,
+        finish: +$.sFinish.value
       }
     }; 
   }
@@ -1239,20 +1251,86 @@
         const H=this.horses[id]; 
         if(H.done) continue; 
         const spec=H.horse; 
-        const fatigue=clamp(1-(H.s/Math.max(1,spec.stamina)),0,0.75); 
+        
+        // スタミナ疲労計算（より現実的に）
+        const maxStamina = spec.stamina || 200;
+        const currentStaminaRatio = Math.max(0, H.s / maxStamina);
+        const fatigueLevel = 1 - currentStaminaRatio;
+        
+        // 位置に基づくコース分析（0-1の進行度）
+        const raceProgress = (H.totalDistance || 0) / (L * totalLaps);
+        const lapProgress = (H.x || 0) / L;
+        
+        // コーナー判定（楕円の左右部分をコーナーとする）
+        const angle = lapProgress * 2 * Math.PI;
+        const isInCorner = (angle > Math.PI/4 && angle < 3*Math.PI/4) || 
+                          (angle > 5*Math.PI/4 && angle < 7*Math.PI/4);
+        
+        // 直線判定（スタート/ゴール前の直線）
+        const isInStraight = (angle >= 7*Math.PI/4) || (angle <= Math.PI/4);
+        const isFinalStraight = H.laps >= totalLaps - 1 && isInStraight;
         
         // 気分による能力補正
-        const moodMultiplier = spec.mood ? spec.mood.multiplier : 1.0;
-        const adjustedTopSpeed = spec.topSpeed * moodMultiplier;
-        const adjustedAccel = spec.accel * moodMultiplier;
+        const moodMultiplier = spec.mood ? spec.mood.mood.multiplier : 1.0;
         
-        const accel=adjustedAccel*(1-0.5*fatigue)+(noise()-0.5)*spec.luck*0.6; 
-        H.v=clamp(H.v+accel*dt,0,adjustedTopSpeed*(1-0.4*fatigue)); 
+        // 基本能力値
+        let adjustedTopSpeed = spec.topSpeed * moodMultiplier;
+        let adjustedAccel = spec.accel * moodMultiplier;
         
+        // スタミナによる後半失速（より段階的に）
+        const staminaPenalty = Math.pow(fatigueLevel, 1.5);
+        adjustedTopSpeed *= (1 - staminaPenalty * 0.6); // 最大60%減速
+        adjustedAccel *= (1 - staminaPenalty * 0.4);   // 最大40%加速低下
+        
+        // コーナーワーク適性
+        if(isInCorner) {
+          const cornerSkill = (spec.corner || 1) / 5; // 0-1に正規化
+          adjustedTopSpeed *= (0.7 + cornerSkill * 0.4); // コーナーでは基本70-110%
+          adjustedAccel *= (0.8 + cornerSkill * 0.3);
+        }
+        
+        // 末脚（最終直線での追い込み）
+        if(isFinalStraight && raceProgress > 0.8) {
+          const finishSkill = (spec.finish || 1) / 5; // 0-1に正規化
+          const finishBoost = 1 + finishSkill * currentStaminaRatio * 0.5; // スタミナ残量も考慮
+          adjustedAccel *= finishBoost;
+          
+          // 末脚の強い馬は最後に一気に伸びる
+          if(raceProgress > 0.9) {
+            adjustedTopSpeed *= (1 + finishSkill * 0.3);
+          }
+        }
+        
+        // 序盤の出遅れ（加速力が低い馬は出遅れやすい）
+        if(raceProgress < 0.1) {
+          const startPenalty = Math.max(0, 1 - (spec.accel || 1) / 3);
+          adjustedAccel *= (1 - startPenalty * 0.3);
+        }
+        
+        // ランダム要素（レース展開の妙）
+        const randomFactor = 0.95 + (noise() * 0.1); // ±5%のランダム
+        
+        // 最終的な加速度計算
+        const targetSpeed = adjustedTopSpeed * randomFactor;
+        const accelRate = adjustedAccel * randomFactor;
+        
+        // 速度更新（より滑らかに）
+        if(H.v < targetSpeed) {
+          H.v = Math.min(targetSpeed, H.v + accelRate * dt);
+        } else {
+          H.v = Math.max(targetSpeed, H.v - accelRate * dt * 0.5); // 減速は緩やか
+        }
+        
+        // 位置更新
         const oldX = H.x;
-        H.x+=H.v*dt; 
-        H.totalDistance += H.v*dt;
-        H.s-=(0.015*H.v*H.v+0.5*dt); 
+        H.x += H.v * dt; 
+        H.totalDistance += H.v * dt;
+        
+        // スタミナ消費（速度とコースに応じて）
+        let staminaCost = 0.01 + (H.v * H.v * 0.001); // 基本消費 + 速度の二乗
+        if(isInCorner) staminaCost *= 1.3; // コーナーでは1.3倍消費
+        if(isFinalStraight) staminaCost *= 1.5; // 最終直線では1.5倍消費
+        H.s -= staminaCost * dt * 60; // 60倍で調整
         
         // 1周判定
         if(oldX < L && H.x >= L) {

@@ -1638,39 +1638,39 @@
         if(isNaN(H.x)) H.x = oldX;
         if(isNaN(H.totalDistance)) H.totalDistance = Math.max(0, oldX);
         
-        // スタミナ消費（調整済み - より持続的に）
-        let staminaCost = 1.0; // 基本消費を半減（以前: 2.0）
+        // スタミナ消費（大幅緩和 - 3倍長持ち）
+        let staminaCost = 0.4; // 基本消費をさらに半減以下（以前: 1.0）
         
-        // 速度による消費（緩和）
-        staminaCost += Math.pow(H.v / 12, 1.8) * 2.0; // 指数を下げて緩和（以前: (H.v/10)^2 * 3.0）
+        // 速度による消費（大幅緩和）
+        staminaCost += Math.pow(H.v / 15, 1.5) * 1.2; // 大幅緩和（以前: (H.v/12)^1.8 * 2.0）
         
         // コース状況による消費（緩和）
-        if(isInCorner) staminaCost *= 1.3; // コーナー消費を緩和（以前: 1.5倍）
-        if(isFinalStraight && raceProgress > 0.8) staminaCost *= 1.6; // 最終直線消費を緩和（以前: 2.0倍）
+        if(isInCorner) staminaCost *= 1.2; // さらに緩和（以前: 1.3倍）
+        if(isFinalStraight && raceProgress > 0.8) staminaCost *= 1.4; // さらに緩和（以前: 1.6倍）
         
         // 加速中の追加消費（緩和）
-        const accelPenalty = Math.max(0, (adjustedAccel - 1) * 0.3); // 緩和（以前: 0.5）
+        const accelPenalty = Math.max(0, (adjustedAccel - 1) * 0.2); // さらに緩和（以前: 0.3）
         staminaCost += accelPenalty;
         
-        const staminaDecrease = staminaCost * dt * 30; // 消費速度を半減（以前: 60）
+        const staminaDecrease = staminaCost * dt * 15; // 消費速度を半減（以前: 30）
         if(!isNaN(staminaDecrease)) {
           H.s -= staminaDecrease;
           H.s = Math.max(0, H.s); // 負の値を防止
         }
         
-        // スタミナ回復システム（強化）
-        if(H.v < adjustedTopSpeed * 0.8) { // 80%以下の速度で走っている時（以前: 70%）
-          const recoveryRate = (adjustedTopSpeed * 0.8 - H.v) / adjustedTopSpeed * 3.0; // 回復率向上（以前: 2.0）
-          const recovery = recoveryRate * dt * 50; // 回復速度向上（以前: 40）
+        // スタミナ回復システム（さらに強化）
+        if(H.v < adjustedTopSpeed * 0.85) { // 85%以下の速度で走っている時（以前: 80%）
+          const recoveryRate = (adjustedTopSpeed * 0.85 - H.v) / adjustedTopSpeed * 4.0; // 回復率大幅向上（以前: 3.0）
+          const recovery = recoveryRate * dt * 60; // 回復速度向上（以前: 50）
           if(!isNaN(recovery)) {
             H.s = Math.min(H.maxS, H.s + recovery); // 最大値まで回復
           }
         }
         
-        // スタミナ切れ時の処理（緩和）
+        // スタミナ切れ時の処理（さらに緩和）
         if(H.s <= 0) {
-          H.v *= 0.98; // 減速を緩和（以前: 0.95で5%減速、現在: 0.98で2%減速）
-          H.v = Math.max(adjustedTopSpeed * 0.25, H.v); // 最低速度を向上（以前: 10%、現在: 25%）
+          H.v *= 0.99; // 減速をさらに緩和（以前: 0.98で2%減速、現在: 0.99で1%減速）
+          H.v = Math.max(adjustedTopSpeed * 0.35, H.v); // 最低速度をさらに向上（以前: 25%、現在: 35%）
         }
         
         // 1周判定
@@ -1704,18 +1704,22 @@
         this.physics(dt,noise); 
         sendAcc+=dt; 
         if(sendAcc>0.10 && state.net){ 
-          const pos={}, vel={}, laps={}, totalDist={}; 
+          const pos={}, vel={}, laps={}, totalDist={}, stamina={}, maxStamina={}; 
           Object.values(this.horses).forEach(H=>{
             // NaN値のチェックと修正
             const safeX = isNaN(H.x) ? 0 : H.x;
             const safeV = isNaN(H.v) ? 0 : H.v;
             const safeLaps = isNaN(H.laps) ? 0 : H.laps;
             const safeTotalDistance = isNaN(H.totalDistance) ? 0 : H.totalDistance;
+            const safeStamina = isNaN(H.s) ? 0 : H.s;
+            const safeMaxStamina = isNaN(H.maxS) ? 400 : H.maxS;
             
             pos[H.id] = Math.round(safeX); 
             vel[H.id] = Math.round(safeV * 100) / 100;
             laps[H.id] = safeLaps;
             totalDist[H.id] = Math.round(safeTotalDistance);
+            stamina[H.id] = Math.round(safeStamina);
+            maxStamina[H.id] = Math.round(safeMaxStamina);
           }); 
           const colors={}; 
           Object.values(this.horses).forEach(H=>{ 
@@ -1727,14 +1731,16 @@
           const hasNaN = Object.values(pos).some(v => isNaN(v)) || 
                         Object.values(vel).some(v => isNaN(v)) || 
                         Object.values(laps).some(v => isNaN(v)) || 
-                        Object.values(totalDist).some(v => isNaN(v));
+                        Object.values(totalDist).some(v => isNaN(v)) ||
+                        Object.values(stamina).some(v => isNaN(v)) ||
+                        Object.values(maxStamina).some(v => isNaN(v));
           
           if(!hasNaN) {
             R('lobbies/'+state.lobbyCode+'/state').set({ 
               t:Date.now(), 
               L:state.trackLen, 
               totalLaps:state.totalLaps, 
-              pos, vel, laps, totalDist, colors 
+              pos, vel, laps, totalDist, stamina, maxStamina, colors 
             }); 
           } else {
             console.warn('NaN values detected, skipping Firebase update');

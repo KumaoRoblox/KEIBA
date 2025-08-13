@@ -188,6 +188,34 @@
     button.danger{background:linear-gradient(180deg, rgba(255,108,159,.25), rgba(255,108,159,.12)); border:1px solid rgba(255,108,159,.45)}
     .success{background:linear-gradient(180deg, rgba(108,255,128,.2), rgba(108,255,128,.12)); border:1px solid rgba(108,255,128,.45)}
 
+    .adjust-btn {
+      width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+      background: linear-gradient(180deg, rgba(108,204,255,.15), rgba(108,204,255,.08));
+      border: 1px solid rgba(108,204,255,.3);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: .15s all ease;
+    }
+    .adjust-btn:hover {
+      background: linear-gradient(180deg, rgba(108,204,255,.25), rgba(108,204,255,.15));
+      transform: none;
+    }
+    .adjust-btn:active {
+      transform: scale(0.95);
+    }
+    .adjust-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
     .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 
     .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:1px dashed var(--border); border-radius:999px; color:var(--muted)}
@@ -228,7 +256,49 @@
     }
     #results{position:absolute; right:16px; top:16px; background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:12px; padding:10px; max-width:300px}
 
-    .slider{display:grid; grid-template-columns:140px minmax(200px,1fr) 100px; gap:12px; align-items:center; min-height:44px}
+    .slider{display:grid; grid-template-columns:140px 1fr 100px; gap:12px; align-items:center; min-height:44px}
+    
+    @media (max-width:768px){
+      .slider{
+        display:flex; 
+        flex-direction:column;
+        gap:4px; 
+        text-align:center;
+        min-height:auto;
+        padding:8px;
+        border:1px solid var(--border);
+        border-radius:8px;
+        margin-bottom:6px;
+        background:rgba(255,255,255,.02);
+      }
+      .slider > div:first-child{
+        font-size:13px; 
+        font-weight:500;
+        margin-bottom:4px;
+        color:var(--text);
+      }
+      .slider > div:last-child{
+        font-size:12px;
+        margin-top:4px;
+        color:var(--accent);
+        font-weight:bold;
+      }
+      .slider > div:nth-child(2) {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .slider > div:nth-child(2) input[type=range] {
+        flex: 1;
+      }
+      .adjust-btn {
+        width: 28px;
+        height: 28px;
+        min-height: 28px;
+        font-size: 16px;
+      }
+    }
     
     .adjustments-container{
       display:grid; 
@@ -389,27 +459,47 @@
             <div class="adjustments-container">
               <div class="slider">
                 <div>最高速度</div>
-                <input type="range" id="sTop" min="0" max="100" step="1" value="20">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button type="button" class="adjust-btn" data-target="sTop" data-delta="-1">−</button>
+                  <input type="range" id="sTop" min="0" max="100" step="1" value="20">
+                  <button type="button" class="adjust-btn" data-target="sTop" data-delta="1">＋</button>
+                </div>
                 <div><span id="vTop">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>加速度</div>
-                <input type="range" id="sAcc" min="0" max="100" step="1" value="20">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button type="button" class="adjust-btn" data-target="sAcc" data-delta="-1">−</button>
+                  <input type="range" id="sAcc" min="0" max="100" step="1" value="20">
+                  <button type="button" class="adjust-btn" data-target="sAcc" data-delta="1">＋</button>
+                </div>
                 <div><span id="vAcc">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>スタミナ</div>
-                <input type="range" id="sSta" min="0" max="100" step="1" value="20">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button type="button" class="adjust-btn" data-target="sSta" data-delta="-1">−</button>
+                  <input type="range" id="sSta" min="0" max="100" step="1" value="20">
+                  <button type="button" class="adjust-btn" data-target="sSta" data-delta="1">＋</button>
+                </div>
                 <div><span id="vSta">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>コーナー</div>
-                <input type="range" id="sCorner" min="0" max="100" step="1" value="20">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button type="button" class="adjust-btn" data-target="sCorner" data-delta="-1">−</button>
+                  <input type="range" id="sCorner" min="0" max="100" step="1" value="20">
+                  <button type="button" class="adjust-btn" data-target="sCorner" data-delta="1">＋</button>
+                </div>
                 <div><span id="vCorner">20</span> pt</div>
               </div>
               <div class="slider">
                 <div>末脚</div>
-                <input type="range" id="sFinish" min="0" max="100" step="1" value="20">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button type="button" class="adjust-btn" data-target="sFinish" data-delta="-1">−</button>
+                  <input type="range" id="sFinish" min="0" max="100" step="1" value="20">
+                  <button type="button" class="adjust-btn" data-target="sFinish" data-delta="1">＋</button>
+                </div>
                 <div><span id="vFinish">20</span> pt</div>
               </div>
               <div class="slider">
@@ -560,6 +650,31 @@
       });
     }
   });
+
+  // 調整ボタンのイベントリスナー
+  document.addEventListener('click', (e) => {
+    if(e.target.classList.contains('adjust-btn')) {
+      e.preventDefault();
+      if(state.started) return; // レース中は無効
+
+      const targetId = e.target.dataset.target;
+      const delta = parseInt(e.target.dataset.delta);
+      const targetEl = el(targetId);
+      
+      if(targetEl) {
+        const currentValue = parseInt(targetEl.value);
+        const newValue = Math.max(0, Math.min(100, currentValue + delta));
+        
+        if(newValue !== currentValue) {
+          targetEl.value = newValue;
+          
+          if(!state.loading) state.me.saved = false;
+          syncLabels();
+          if(state.me.ready) setReady(false);
+        }
+      }
+    }
+  });
   
   syncLabels();
 
@@ -617,6 +732,11 @@
   function applyLockState(){
     [$.sTop,$.sAcc,$.sSta,$.sCorner,$.sFinish,$.hColor,$.save,$.raceTitle,$.totalLaps].forEach(e=>{ 
       if(e) e.disabled = !!state.started; 
+    });
+    
+    // 調整ボタンも無効化
+    document.querySelectorAll('.adjust-btn').forEach(btn => {
+      btn.disabled = !!state.started;
     });
   }
 
@@ -1084,7 +1204,7 @@
       state.raceTitle=v.raceTitle||'みんなで競馬';
       state.abandoned=v.abandoned||null;
       
-      // レース設定の同期
+      // レース設定の同期（ホストの設定を他の参加者にも反映）
       if($.totalLaps) $.totalLaps.value = state.totalLaps;
       if($.raceTitle) $.raceTitle.value = state.raceTitle;
       if($.raceHeader) $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
@@ -1847,15 +1967,27 @@
   // レース設定の変更監視（ホストのみ）
   if($.raceTitle) {
     $.raceTitle.addEventListener('input', () => {
+      if(!state.isHost) return; // ホストのみ変更可能
       state.raceTitle = $.raceTitle.value.trim() || 'みんなで競馬';
       $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
+      
+      // Firebaseに即座に同期（ホストのみ）
+      if(state.net && state.lobbyCode) {
+        R('lobbies/'+state.lobbyCode).update({ raceTitle: state.raceTitle });
+      }
     });
   }
 
   if($.totalLaps) {
     $.totalLaps.addEventListener('input', () => {
+      if(!state.isHost) return; // ホストのみ変更可能
       state.totalLaps = parseInt($.totalLaps.value) || 3;
       $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
+      
+      // Firebaseに即座に同期（ホストのみ）
+      if(state.net && state.lobbyCode) {
+        R('lobbies/'+state.lobbyCode).update({ totalLaps: state.totalLaps });
+      }
     });
   }
 

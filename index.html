@@ -421,8 +421,8 @@
               <div>・<b>レース中はステータスや色の変更はできません</b>（自動でロック）。</div>
               <div>・<b>誰かが途中で抜けたら試合は放棄</b>（全員に通知）。</div>
               <div>・<b>3周制レース</b>：スタート/ゴール地点を3回通過したらゴール！</div>
-              <div>・<b>新能力</b>：コーナー（カーブでの減速抑制）、末脚（最終直線での爆発力）</div>
-              <div>・<b>スタミナ</b>：少ないと後半大幅失速、多いと持続力アップ</div>
+              <div>・<b>バランス重視</b>：最高速度一強を防ぎ、各能力が重要な役割を持つ</div>
+              <div>・<b>戦略的要素</b>：序盤（加速）、中盤（コーナー・スタミナ）、終盤（末脚）</div>
             </div>
           </div>
 
@@ -771,12 +771,21 @@
       mood = state.me.horse.mood; // 既存の気分を保持
     }
     
-    // ポイントを実際の能力値に変換
-    const topSpeedBase = 8 + (+$.sTop.value) * 0.25; // 8-33 m/s
-    const accelBase = 0.8 + (+$.sAcc.value) * 0.06; // 0.8-6.8 m/s²
-    const staminaBase = 100 + (+$.sSta.value) * 40; // 100-4100
-    const cornerBase = 0.5 + (+$.sCorner.value) * 0.05; // 0.5-5.5 (コーナー適性)
-    const finishBase = 0.5 + (+$.sFinish.value) * 0.05; // 0.5-5.5 (末脚適性)
+    // バランス調整済みの能力値変換
+    // 最高速度: 基礎値を下げ、上限も抑制
+    const topSpeedBase = 12 + (+$.sTop.value) * 0.15; // 12-27 m/s (以前: 8-33)
+    
+    // 加速度: より重要度を上げ、効果を明確に
+    const accelBase = 1.5 + (+$.sAcc.value) * 0.08; // 1.5-9.5 m/s² (以前: 0.8-6.8)
+    
+    // スタミナ: より効果的に、後半への影響を強化
+    const staminaBase = 200 + (+$.sSta.value) * 50; // 200-5200 (以前: 100-4100)
+    
+    // コーナー: 効果をより明確に
+    const cornerBase = 1.0 + (+$.sCorner.value) * 0.06; // 1.0-7.0 (以前: 0.5-5.5)
+    
+    // 末脚: 最終局面での重要性を向上
+    const finishBase = 1.0 + (+$.sFinish.value) * 0.08; // 1.0-9.0 (以前: 0.5-5.5)
     
     return { 
       name: $.hName.value.trim()||'ノーマル', 
@@ -1166,12 +1175,22 @@
         return;
       }
       
+      // ゲーム開始状態の変化を検出
+      const wasStarted = state.started;
+      const isStarted = !!v.started;
+      
       state.lobby=v; 
-      state.started=!!v.started; 
+      state.started=isStarted; 
       state.seed=v.seed||0; 
       state.trackLen=v.trackLen||400; 
       state.totalLaps=v.totalLaps||3;
       state.abandoned=v.abandoned||null;
+      
+      // 参加者側でゲーム開始を検出した場合
+      if(!state.isHost && !wasStarted && isStarted) {
+        console.log('Game started detected by participant, starting race...');
+        sim.start();
+      }
       
       // ローディング状態で設定を更新
       state.loading = true;
@@ -1443,14 +1462,20 @@
             totalLaps:state.totalLaps
           }); 
         } 
+      } else {
+        // 参加者側の場合、シードを取得
+        if(state.lobby && state.lobby.seed) {
+          state.seed = state.lobby.seed;
+        }
       }
       
       updateButtonsState(); 
       applyLockState();
       
-      // 出馬表の表示
+      // 出馬表の表示（全員に表示）
       await showStartingLineup();
       
+      // カウントダウン（全員に表示）
       for(let i=3;i>0;i--){ 
         $.count.textContent=String(i); 
         await sleep(800);
@@ -1460,6 +1485,7 @@
       await sleep(400); 
       $.count.textContent='';
       
+      // ホストのみ物理演算を開始
       if(state.isHost){ 
         this.loopHost(); 
       }
@@ -1507,38 +1533,52 @@
         // 気分による能力補正
         const moodMultiplier = (spec.mood && spec.mood.multiplier) ? spec.mood.multiplier : 1.0;
         
-        // 基本能力値（NaN防止）
-        let adjustedTopSpeed = Math.max(1, (spec.topSpeed || 10) * moodMultiplier);
-        let adjustedAccel = Math.max(0.1, (spec.accel || 2) * moodMultiplier);
+        // 基本能力値（バランス調整済み）
+        let adjustedTopSpeed = Math.max(5, (spec.topSpeed || 15) * moodMultiplier);
+        let adjustedAccel = Math.max(0.5, (spec.accel || 3) * moodMultiplier);
         
-        // スタミナによる後半失速（より段階的に）
-        const staminaPenalty = Math.pow(fatigueLevel, 1.5);
-        adjustedTopSpeed *= (1 - staminaPenalty * 0.6); // 最大60%減速
-        adjustedAccel *= (1 - staminaPenalty * 0.4);   // 最大40%加速低下
+        // スタミナによる後半失速（より強力に）
+        const staminaPenalty = Math.pow(fatigueLevel, 1.2); // 指数を下げて段階的に
+        adjustedTopSpeed *= (1 - staminaPenalty * 0.8); // 最大80%減速（以前: 60%）
+        adjustedAccel *= (1 - staminaPenalty * 0.6);   // 最大60%加速低下（以前: 40%）
         
-        // コーナーワーク適性
+        // コーナーワーク適性（効果を強化）
         if(isInCorner) {
-          const cornerSkill = Math.max(0, Math.min(1, (spec.corner || 1) / 5)); // 0-1に正規化
-          adjustedTopSpeed *= (0.7 + cornerSkill * 0.4); // コーナーでは基本70-110%
-          adjustedAccel *= (0.8 + cornerSkill * 0.3);
+          const cornerSkill = Math.max(0, Math.min(1, (spec.corner || 2) / 8)); // 0-1に正規化
+          adjustedTopSpeed *= (0.6 + cornerSkill * 0.5); // コーナーでは基本60-110%（以前: 70-110%）
+          adjustedAccel *= (0.7 + cornerSkill * 0.4);   // 加速も影響を強化
         }
         
-        // 末脚（最終直線での追い込み）
+        // 末脚（最終直線での追い込み）強化
         if(isFinalStraight && raceProgress > 0.8) {
-          const finishSkill = Math.max(0, Math.min(1, (spec.finish || 1) / 5)); // 0-1に正規化
-          const finishBoost = 1 + finishSkill * currentStaminaRatio * 0.5; // スタミナ残量も考慮
+          const finishSkill = Math.max(0, Math.min(1, (spec.finish || 2) / 10)); // 0-1に正規化
+          const finishBoost = 1 + finishSkill * currentStaminaRatio * 0.8; // スタミナ残量も考慮（以前: 0.5）
           adjustedAccel *= finishBoost;
           
-          // 末脚の強い馬は最後に一気に伸びる
+          // 末脚の強い馬は最後に一気に伸びる（効果強化）
           if(raceProgress > 0.9) {
-            adjustedTopSpeed *= (1 + finishSkill * 0.3);
+            adjustedTopSpeed *= (1 + finishSkill * 0.5); // 以前: 0.3
           }
         }
         
-        // 序盤の出遅れ（加速力が低い馬は出遅れやすい）
-        if(raceProgress < 0.1) {
-          const startPenalty = Math.max(0, Math.min(1, 1 - (spec.accel || 1) / 3));
-          adjustedAccel *= (1 - startPenalty * 0.3);
+        // 序盤の出遅れ（加速度の重要性を向上）
+        if(raceProgress < 0.15) { // 範囲を拡大
+          const startPenalty = Math.max(0, Math.min(0.5, 1 - (spec.accel || 2) / 5)); // 加速度の影響を強化
+          adjustedAccel *= (1 - startPenalty * 0.4); // 以前: 0.3
+        }
+        
+        // 中盤でのスタミナ配分戦略
+        if(raceProgress > 0.3 && raceProgress < 0.8) {
+          const staminaStrategy = currentStaminaRatio;
+          // スタミナに余裕がある馬はペースアップ
+          if(staminaStrategy > 0.7) {
+            adjustedAccel *= 1.1;
+          }
+          // スタミナが少ない馬はペースダウンで温存
+          else if(staminaStrategy < 0.3) {
+            adjustedTopSpeed *= 0.9;
+            adjustedAccel *= 0.8;
+          }
         }
         
         // ランダム要素（レース展開の妙）

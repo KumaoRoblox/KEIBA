@@ -1413,12 +1413,12 @@
           id, 
           name:p.name||id.slice(0,4), 
           horse:h, 
-          x:0, 
-          v:0, 
-          s:h.stamina||200, 
-          done:false,
-          laps:0, // 現在の周回数
-          totalDistance:0 // 総走行距離
+          x: 0, // 初期値を明示的に設定
+          v: 0, // 初期値を明示的に設定
+          s: Math.max(100, h.stamina||200), // 最小値を保証
+          done: false,
+          laps: 0, // 初期値を明示的に設定
+          totalDistance: 0 // 初期値を明示的に設定
         }; 
         lanes.push({id, color:h.color||'#fff'}); 
       }); 
@@ -1468,19 +1468,32 @@
       const L=state.trackLen;
       const totalLaps=state.totalLaps;
       
+      // NaN値のチェック
+      if(isNaN(dt) || dt <= 0 || dt > 1) {
+        console.warn('Invalid dt value:', dt);
+        return;
+      }
+      
       for(const id in this.horses){ 
         const H=this.horses[id]; 
         if(H.done) continue; 
         const spec=H.horse; 
         
+        // NaN値のチェックと修正
+        if(isNaN(H.x)) H.x = 0;
+        if(isNaN(H.v)) H.v = 0;
+        if(isNaN(H.s)) H.s = Math.max(100, spec.stamina || 200);
+        if(isNaN(H.laps)) H.laps = 0;
+        if(isNaN(H.totalDistance)) H.totalDistance = 0;
+        
         // スタミナ疲労計算（より現実的に）
-        const maxStamina = spec.stamina || 200;
-        const currentStaminaRatio = Math.max(0, H.s / maxStamina);
+        const maxStamina = Math.max(100, spec.stamina || 200);
+        const currentStaminaRatio = Math.max(0, Math.min(1, H.s / maxStamina));
         const fatigueLevel = 1 - currentStaminaRatio;
         
         // 位置に基づくコース分析（0-1の進行度）
-        const raceProgress = (H.totalDistance || 0) / (L * totalLaps);
-        const lapProgress = (H.x || 0) / L;
+        const raceProgress = Math.max(0, Math.min(1, (H.totalDistance || 0) / (L * totalLaps)));
+        const lapProgress = Math.max(0, Math.min(1, (H.x || 0) / L));
         
         // コーナー判定（楕円の左右部分をコーナーとする）
         const angle = lapProgress * 2 * Math.PI;
@@ -1492,11 +1505,11 @@
         const isFinalStraight = H.laps >= totalLaps - 1 && isInStraight;
         
         // 気分による能力補正
-        const moodMultiplier = spec.mood ? spec.mood.multiplier : 1.0;
+        const moodMultiplier = (spec.mood && spec.mood.multiplier) ? spec.mood.multiplier : 1.0;
         
-        // 基本能力値
-        let adjustedTopSpeed = spec.topSpeed * moodMultiplier;
-        let adjustedAccel = spec.accel * moodMultiplier;
+        // 基本能力値（NaN防止）
+        let adjustedTopSpeed = Math.max(1, (spec.topSpeed || 10) * moodMultiplier);
+        let adjustedAccel = Math.max(0.1, (spec.accel || 2) * moodMultiplier);
         
         // スタミナによる後半失速（より段階的に）
         const staminaPenalty = Math.pow(fatigueLevel, 1.5);
@@ -1505,14 +1518,14 @@
         
         // コーナーワーク適性
         if(isInCorner) {
-          const cornerSkill = (spec.corner || 1) / 5; // 0-1に正規化
+          const cornerSkill = Math.max(0, Math.min(1, (spec.corner || 1) / 5)); // 0-1に正規化
           adjustedTopSpeed *= (0.7 + cornerSkill * 0.4); // コーナーでは基本70-110%
           adjustedAccel *= (0.8 + cornerSkill * 0.3);
         }
         
         // 末脚（最終直線での追い込み）
         if(isFinalStraight && raceProgress > 0.8) {
-          const finishSkill = (spec.finish || 1) / 5; // 0-1に正規化
+          const finishSkill = Math.max(0, Math.min(1, (spec.finish || 1) / 5)); // 0-1に正規化
           const finishBoost = 1 + finishSkill * currentStaminaRatio * 0.5; // スタミナ残量も考慮
           adjustedAccel *= finishBoost;
           
@@ -1524,7 +1537,7 @@
         
         // 序盤の出遅れ（加速力が低い馬は出遅れやすい）
         if(raceProgress < 0.1) {
-          const startPenalty = Math.max(0, 1 - (spec.accel || 1) / 3);
+          const startPenalty = Math.max(0, Math.min(1, 1 - (spec.accel || 1) / 3));
           adjustedAccel *= (1 - startPenalty * 0.3);
         }
         
@@ -1532,31 +1545,54 @@
         const randomFactor = 0.95 + (noise() * 0.1); // ±5%のランダム
         
         // 最終的な加速度計算
-        const targetSpeed = adjustedTopSpeed * randomFactor;
-        const accelRate = adjustedAccel * randomFactor;
+        const targetSpeed = Math.max(0, adjustedTopSpeed * randomFactor);
+        const accelRate = Math.max(0, adjustedAccel * randomFactor);
         
         // 速度更新（より滑らかに）
         if(H.v < targetSpeed) {
           H.v = Math.min(targetSpeed, H.v + accelRate * dt);
         } else {
-          H.v = Math.max(targetSpeed, H.v - accelRate * dt * 0.5); // 減速は緩やか
+          H.v = Math.max(0, Math.max(targetSpeed, H.v - accelRate * dt * 0.5)); // 減速は緩やか
         }
+        
+        // NaN値のチェック
+        if(isNaN(H.v)) H.v = 0;
+        H.v = Math.max(0, H.v); // 負の値を防止
         
         // 位置更新
         const oldX = H.x;
-        H.x += H.v * dt; 
-        H.totalDistance += H.v * dt;
+        const deltaX = H.v * dt;
+        if(isNaN(deltaX)) {
+          console.warn('NaN deltaX detected', { v: H.v, dt: dt });
+          continue;
+        }
+        
+        H.x += deltaX; 
+        H.totalDistance += deltaX;
+        
+        // NaN値のチェック
+        if(isNaN(H.x)) H.x = oldX;
+        if(isNaN(H.totalDistance)) H.totalDistance = Math.max(0, oldX);
         
         // スタミナ消費（速度とコースに応じて）
         let staminaCost = 0.01 + (H.v * H.v * 0.001); // 基本消費 + 速度の二乗
         if(isInCorner) staminaCost *= 1.3; // コーナーでは1.3倍消費
         if(isFinalStraight) staminaCost *= 1.5; // 最終直線では1.5倍消費
-        H.s -= staminaCost * dt * 60; // 60倍で調整
+        
+        const staminaDecrease = staminaCost * dt * 60;
+        if(!isNaN(staminaDecrease)) {
+          H.s -= staminaDecrease; // 60倍で調整
+          H.s = Math.max(0, H.s); // 負の値を防止
+        }
         
         // 1周判定
         if(oldX < L && H.x >= L) {
           H.laps++;
           H.x = H.x - L; // 超過分を次の周に持ち越し
+          
+          // NaN値のチェック
+          if(isNaN(H.x)) H.x = 0;
+          if(isNaN(H.laps)) H.laps = 1;
           
           // ゴール判定（3周完了）
           if(H.laps >= totalLaps) {
@@ -1582,17 +1618,39 @@
         if(sendAcc>0.10 && state.net){ 
           const pos={}, vel={}, laps={}, totalDist={}; 
           Object.values(this.horses).forEach(H=>{
-            pos[H.id]=Math.round(H.x); 
-            vel[H.id]=Math.round(H.v*100)/100;
-            laps[H.id]=H.laps;
-            totalDist[H.id]=Math.round(H.totalDistance);
+            // NaN値のチェックと修正
+            const safeX = isNaN(H.x) ? 0 : H.x;
+            const safeV = isNaN(H.v) ? 0 : H.v;
+            const safeLaps = isNaN(H.laps) ? 0 : H.laps;
+            const safeTotalDistance = isNaN(H.totalDistance) ? 0 : H.totalDistance;
+            
+            pos[H.id] = Math.round(safeX); 
+            vel[H.id] = Math.round(safeV * 100) / 100;
+            laps[H.id] = safeLaps;
+            totalDist[H.id] = Math.round(safeTotalDistance);
           }); 
           const colors={}; 
           Object.values(this.horses).forEach(H=>{ 
             const p=state.players[H.id]; 
             colors[H.id]=(p&&p.horse&&p.horse.color)||'#7dd3fc'; 
           }); 
-          R('lobbies/'+state.lobbyCode+'/state').set({ t:Date.now(), L:state.trackLen, totalLaps:state.totalLaps, pos, vel, laps, totalDist, colors }); 
+          
+          // NaN値が含まれていないかチェック
+          const hasNaN = Object.values(pos).some(v => isNaN(v)) || 
+                        Object.values(vel).some(v => isNaN(v)) || 
+                        Object.values(laps).some(v => isNaN(v)) || 
+                        Object.values(totalDist).some(v => isNaN(v));
+          
+          if(!hasNaN) {
+            R('lobbies/'+state.lobbyCode+'/state').set({ 
+              t:Date.now(), 
+              L:state.trackLen, 
+              totalLaps:state.totalLaps, 
+              pos, vel, laps, totalDist, colors 
+            }); 
+          } else {
+            console.warn('NaN values detected, skipping Firebase update');
+          }
           sendAcc=0; 
         } 
         if(state.ctx) drawRace(); 
@@ -1646,20 +1704,26 @@
 
   function getPos(id){ 
     if(state.isHost){ 
-      return sim.horses[id] && sim.horses[id].x || 0; 
+      const horse = sim.horses[id];
+      const pos = horse ? horse.x : 0;
+      return isNaN(pos) ? 0 : pos;
     } 
     const st = state.lastState; 
     if(!st || !st.pos) return 0; 
-    return st.pos[id] || 0; 
+    const pos = st.pos[id] || 0;
+    return isNaN(pos) ? 0 : pos;
   }
 
   function getLaps(id){
     if(state.isHost){
-      return sim.horses[id] && sim.horses[id].laps || 0;
+      const horse = sim.horses[id];
+      const laps = horse ? horse.laps : 0;
+      return isNaN(laps) ? 0 : laps;
     }
     const st = state.lastState;
     if(!st || !st.laps) return 0;
-    return st.laps[id] || 0;
+    const laps = st.laps[id] || 0;
+    return isNaN(laps) ? 0 : laps;
   }
 
   // 縦向き楕円コースでのレース描画（3周制対応）

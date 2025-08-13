@@ -1065,6 +1065,11 @@
     const code=makeCode(); 
     state.lobbyCode=code; 
     state.isHost=true; 
+    
+    // ホスト権限をローカルストレージに保存
+    localStorage.setItem('hostLobby', code);
+    localStorage.setItem('hostId', uid);
+    
     updateHeader();
     
     if(state.net){ 
@@ -1091,7 +1096,18 @@
 
   async function joinLobby(code){ 
     state.lobbyCode=code; 
-    state.isHost=false; 
+    
+    // ホスト権限チェック
+    const savedHostLobby = localStorage.getItem('hostLobby');
+    const savedHostId = localStorage.getItem('hostId');
+    
+    if(savedHostLobby === code && savedHostId === uid) {
+      console.log('Restoring host privileges for lobby:', code);
+      state.isHost = true;
+    } else {
+      state.isHost = false;
+    }
+    
     updateHeader(); 
     
     if(state.net){ 
@@ -1184,6 +1200,15 @@
         console.log('Lobby does not exist or was deleted, resetting state');
         resetLobbyState();
         return;
+      }
+      
+      // ホスト権限の確認・復元
+      if(v.hostId === uid) {
+        console.log('Confirmed as host by Firebase data');
+        state.isHost = true;
+        localStorage.setItem('hostLobby', code);
+        localStorage.setItem('hostId', uid);
+        updateHeader();
       }
       
       // ゲーム開始状態の変化を検出
@@ -1292,7 +1317,6 @@
     });
   }
 
-  // ロビー自動削除機能（超強力版）
   function checkAndCleanupLobby(code, players) {
     if(!state.net || !code) return;
     
@@ -1400,6 +1424,10 @@
       clearTimeout(state.emptyLobbyTimeout);
       state.emptyLobbyTimeout = null;
     }
+    
+    // ホスト権限情報をクリア
+    localStorage.removeItem('hostLobby');
+    localStorage.removeItem('hostId');
     
     // 状態を完全リセット
     state.lobbyCode = null;

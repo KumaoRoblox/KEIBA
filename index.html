@@ -542,8 +542,12 @@
   // 準備ボタンの状態更新
   function updateReadyButtonState() {
     if($.ready) {
-      $.ready.disabled = !state.me.saved || state.started;
-      $.ready.style.opacity = (!state.me.saved || state.started) ? '0.5' : '1';
+      const canReady = state.me.saved && !state.started;
+      $.ready.disabled = !canReady;
+      $.ready.style.opacity = canReady ? '1' : '0.5';
+      
+      // デバッグ用ログ（必要に応じて削除）
+      console.log('Ready button state:', { saved: state.me.saved, started: state.started, canReady });
     }
   }
   
@@ -798,9 +802,15 @@
     if(state.started){ ensurePresence(); return; }
     const name=$.pName.value.trim()||`Player-${uid.slice(0,4).toUpperCase()}`;
     let horse=collectHorse(newMood); // 新しい気分フラグを渡す
+    
+    // 他の馬と被らない色を取得（参加時も適用）
     horse.color=uniqueColor(horse.color,true);
-    $.hColor.value=horse.color; $.colorBox.style.background=horse.color;
-    state.me.name=name; state.me.horse=horse; $.who.textContent=name;
+    $.hColor.value=horse.color; 
+    $.colorBox.style.background=horse.color;
+    
+    state.me.name=name; 
+    state.me.horse=horse; 
+    $.who.textContent=name;
     
     // 保存状態を更新
     state.me.saved = true;
@@ -1027,7 +1037,9 @@
     
     $.code.textContent=code; 
     history.replaceState(null,'', location.pathname+`?room=${code}`);
-    await upsertMe(true); // 新しい気分を生成
+    
+    // ロビー作成時に自動保存（他の馬と被らない色で）
+    await upsertMe(true); // 新しい気分を生成して自動保存
     ensurePresence(); 
     updateRoleUI();
   }
@@ -1040,7 +1052,9 @@
     if(state.net){ 
       subscribeLobby(code); 
       ensurePresence(); 
-      await sleep(50); 
+      await sleep(100); // 少し長めに待機してプレイヤー情報を取得
+      
+      // 参加時に他の馬と被らない色で自動保存
       await upsertMe(true); // 新しい気分を生成して自動保存
     } 
     
@@ -1110,7 +1124,25 @@
     
     R('lobbies/'+code+'/players').on('value', snap=>{
       const players = snap.val()||{};
+      const oldPlayers = state.players || {};
       state.players = players; 
+      
+      // 新しくプレイヤーが参加した場合、色の重複をチェック
+      const newPlayerIds = Object.keys(players).filter(id => !oldPlayers[id]);
+      if(newPlayerIds.length > 0 && newPlayerIds.includes(uid)) {
+        // 自分が新規参加者の場合、色の重複をチェックして修正
+        setTimeout(() => {
+          const currentColor = $.hColor.value;
+          const newColor = uniqueColor(currentColor, true);
+          if(currentColor !== newColor) {
+            $.hColor.value = newColor;
+            $.colorBox.style.background = newColor;
+            // 色が変更された場合は自動で再保存
+            upsertMe(false);
+          }
+        }, 100);
+      }
+      
       renderPlayers(); 
       buildLanesFromPlayers(); 
       updateRoleUI(); 

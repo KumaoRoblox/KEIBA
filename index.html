@@ -1092,17 +1092,15 @@
 
   async function abortToLobby(){
     if(!(state.isHost && state.started)) return;
+    
+    console.log('Aborting race and resetting all players ready state');
+    
     if(state.net && state.lobbyCode){
+      // ロビー状態をリセット
       await R('lobbies/'+state.lobbyCode).update({ started:false, abandoned:null });
       await R('lobbies/'+state.lobbyCode+'/state').remove();
-    }
-    state.started=false; 
-    state.abandoned=null; 
-    state.results=[]; 
-    state.lastState=null;
-    
-    // 全員の準備状態をリセット
-    if(state.net && state.lobbyCode) {
+      
+      // 全員の準備状態を強制的にリセット
       const updates = {};
       Object.keys(state.players).forEach(playerId => {
         updates[`lobbies/${state.lobbyCode}/players/${playerId}/ready`] = false;
@@ -1112,9 +1110,18 @@
       }
     }
     
+    // ローカル状態のリセット
+    state.started = false; 
+    state.abandoned = null; 
+    state.results = []; 
+    state.lastState = null;
+    
     // 自分の準備状態もリセット & 新しい気分を生成
     state.me.ready = false;
     state.me.saved = false; // 保存状態もリセット
+    
+    console.log('Local state reset, me.ready:', state.me.ready, 'me.saved:', state.me.saved);
+    
     updateReadyButton();
     await upsertMe(true); // 新しい気分を生成
     
@@ -1123,6 +1130,8 @@
     applyLockState(); 
     updateButtonsState(); 
     updateStartVisibility();
+    
+    console.log('Abort completed, me.ready:', state.me.ready, 'me.saved:', state.me.saved);
   }
 
   function subscribeLobby(code){ 
@@ -1156,6 +1165,13 @@
       const players = snap.val()||{};
       const oldPlayers = state.players || {};
       state.players = players; 
+      
+      // 自分がロビーから削除された場合の処理
+      if(!players[uid] && oldPlayers[uid]) {
+        console.log('Player was removed from lobby, resetting state');
+        resetLobbyState();
+        return;
+      }
       
       // 新しくプレイヤーが参加した場合、色の重複をチェック
       const newPlayerIds = Object.keys(players).filter(id => !oldPlayers[id]);
@@ -1204,27 +1220,32 @@
     });
   }
 
-  // ロビー自動削除機能（修正版）
+  // ロビー自動削除機能（強化版）
   function checkAndCleanupLobby(code, players) {
     if(!state.net || !code) return;
     
     const playerCount = Object.keys(players).length;
     
     if(playerCount === 0) {
-      // 誰もいない場合、20秒後に削除予約
+      // 誰もいない場合、10秒後に削除予約（短縮）
       if(!state.emptyLobbyTimeout) {
-        console.log(`Lobby ${code} is empty, scheduling deletion in 20 seconds`);
+        console.log(`Lobby ${code} is empty, scheduling deletion in 10 seconds`);
         state.emptyLobbyTimeout = setTimeout(async () => {
           try {
-            // 20秒後に再度チェック
+            // 10秒後に再度チェック
             const snapshot = await R('lobbies/'+code+'/players').once('value');
             const currentPlayers = snapshot.val() || {};
             const currentPlayerCount = Object.keys(currentPlayers).length;
             
             if(currentPlayerCount === 0) {
-              // まだ誰もいなければロビーを削除
+              // まだ誰もいなければロビー全体を削除
               await R('lobbies/'+code).remove();
               console.log(`Empty lobby ${code} has been automatically deleted`);
+              
+              // 自分がそのロビーにいた場合は状態をリセット
+              if(state.lobbyCode === code) {
+                await resetLobbyState();
+              }
             } else {
               console.log(`Lobby ${code} has players again, deletion cancelled`);
             }
@@ -1232,7 +1253,7 @@
             console.warn('Failed to cleanup empty lobby:', e);
           }
           state.emptyLobbyTimeout = null;
-        }, 20000); // 20秒
+        }, 10000); // 10秒に短縮
       }
     } else {
       // 誰かがいる場合、削除予約をキャンセル
@@ -1242,6 +1263,29 @@
         state.emptyLobbyTimeout = null;
       }
     }
+  }
+
+  // ロビー状態のリセット
+  async function resetLobbyState() {
+    state.lobbyCode = null;
+    state.isHost = false;
+    state.players = {};
+    state.started = false;
+    state.results = [];
+    state.abandoned = null;
+    state.me.ready = false;
+    state.me.saved = false;
+    
+    // UI更新
+    $.code.textContent = '-';
+    $.who.textContent = '未接続';
+    renderPlayers();
+    buildLanesFromPlayers();
+    renderResults();
+    updateStartVisibility();
+    updateRoleUI();
+    updateReadyButton();
+    history.replaceState(null, '', location.pathname);
   }
 
   async function leaveLobby(){ 
@@ -1258,20 +1302,8 @@
       } 
     } 
     
-    state.lobbyCode=null; 
-    state.isHost=false; 
-    state.players={}; 
-    state.started=false; 
-    state.results=[]; 
-    state.abandoned=null; 
-    $.code.textContent='-'; 
-    $.who.textContent='未接続'; 
-    renderPlayers(); 
-    buildLanesFromPlayers(); 
-    renderResults(); 
-    updateStartVisibility(); 
-    updateRoleUI(); 
-    history.replaceState(null,'', location.pathname); 
+    // 状態リセット
+    await resetLobbyState();
   }
 
   const sim = {
@@ -1754,12 +1786,41 @@
   if(abort2) abort2.addEventListener('click', async ()=>{ await abortToLobby(); });
 
   // URLから自動参加
-  (function autoJoin(){ const q=new URLSearchParams(location.search); const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); if(room){ joinLobby(room.padStart(4,'0')); } else { updateRoleUI(); } })();
+  (function autoJoin(){ 
+    const q=new URLSearchParams(location.search); 
+    const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); 
+    if(room){ 
+      joinLobby(room.padStart(4,'0')); 
+    } else { 
+      updateRoleUI(); 
+    } 
+  })();
 
   // 名前/馬名ローカル保存
-  (function restoreLocal(){ const pn=localStorage.getItem('playerName'); if(pn) $.pName.value=pn; const hn=localStorage.getItem('horseName'); if(hn) $.hName.value=hn; })();
-  $.pName.addEventListener('input', ()=>localStorage.setItem('playerName',$.pName.value));
-  $.hName.addEventListener('input', ()=>localStorage.setItem('horseName',$.hName.value));
+  (function restoreLocal(){ 
+    const pn=localStorage.getItem('playerName'); 
+    if(pn) $.pName.value=pn; 
+    const hn=localStorage.getItem('horseName'); 
+    if(hn) $.hName.value=hn; 
+  })();
+  
+  // 名前変更時のローカル保存
+  $.pName.addEventListener('input', ()=>{
+    localStorage.setItem('playerName',$.pName.value);
+    // 名前変更時も保存状態をリセット
+    if(!state.loading) {
+      state.me.saved = false;
+      updateReadyButtonState();
+    }
+  });
+  $.hName.addEventListener('input', ()=>{
+    localStorage.setItem('horseName',$.hName.value);
+    // 馬名変更時も保存状態をリセット
+    if(!state.loading) {
+      state.me.saved = false;
+      updateReadyButtonState();
+    }
+  });
 
   // キャンバス初期化とクライアントループ
   setupCanvas(); 

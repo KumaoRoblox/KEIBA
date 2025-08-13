@@ -1210,8 +1210,9 @@
     ctx.lineWidth = 6*dpr;
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.moveTo(centerX + radiusX - laneSpacing, centerY - laneSpacing * (laneCount + 1));
-    ctx.lineTo(centerX + radiusX - laneSpacing, centerY + laneSpacing * (laneCount + 1));
+    const lineLength = laneSpacing * (laneCount + 1);
+    ctx.moveTo(centerX + radiusX - lineLength, centerY);
+    ctx.lineTo(centerX + radiusX + lineLength, centerY);
     ctx.stroke();
     
     // スタート/ゴール表示

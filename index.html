@@ -417,6 +417,7 @@
             </div>
             <div class="help">
               <div>・ロビー作成者がホストです。参加者は4桁コード入力で参加できます。</div>
+              <div>・<b>設定を保存してから準備OKを押してください</b>（保存必須）。</div>
               <div>・<b>レース中はステータスや色の変更はできません</b>（自動でロック）。</div>
               <div>・<b>誰かが途中で抜けたら試合は放棄</b>（全員に通知）。</div>
               <div>・<b>3周制レース</b>：スタート/ゴール地点を3回通過したらゴール！</div>
@@ -486,7 +487,7 @@
 
   const state = {
     net:false, app:null, db:null,
-    me:{ id:uid, name:"", horse:null, ready:false },
+    me:{ id:uid, name:"", horse:null, ready:false, saved:false }, // 保存状態を追加
     lobby:null, lobbyCode:null, isHost:false, players:{},
     started:false, seed:null, results:[],
     ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
@@ -531,6 +532,18 @@
     if($.save) {
       $.save.disabled = remaining !== 0 || state.started;
       $.save.style.opacity = remaining !== 0 ? '0.5' : '1';
+    }
+    
+    // 設定が変更されたら保存状態をリセット
+    state.me.saved = false;
+    updateReadyButtonState();
+  }
+  
+  // 準備ボタンの状態更新
+  function updateReadyButtonState() {
+    if($.ready) {
+      $.ready.disabled = !state.me.saved || state.started;
+      $.ready.style.opacity = (!state.me.saved || state.started) ? '0.5' : '1';
     }
   }
   
@@ -713,7 +726,11 @@
     });
   }
   function updateStartVisibility(){ const show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
-  function updateReadyButton(){ $.ready.textContent=state.me.ready? '準備解除':'準備OK'; $.ready.className=state.me.ready? 'secondary':'success'; }
+  function updateReadyButton(){ 
+    $.ready.textContent=state.me.ready? '準備解除':'準備OK'; 
+    $.ready.className=state.me.ready? 'secondary':'success';
+    updateReadyButtonState(); // 保存状態もチェック
+  }
 
   function generateRandomMood() {
     const moods = [
@@ -784,6 +801,11 @@
     horse.color=uniqueColor(horse.color,true);
     $.hColor.value=horse.color; $.colorBox.style.background=horse.color;
     state.me.name=name; state.me.horse=horse; $.who.textContent=name;
+    
+    // 保存状態を更新
+    state.me.saved = true;
+    updateReadyButtonState();
+    
     if(state.net && state.lobbyCode){
       await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ name, horse, updatedAt:Date.now(), ready:state.me.ready||false });
       ensurePresence();
@@ -970,7 +992,19 @@
     }, 500);
   }
 
-  async function setReady(val){ state.me.ready=!!val; updateReadyButton(); if(state.net && state.lobbyCode){ await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ ready:state.me.ready, updatedAt:Date.now() }); } renderPlayers(); updateStartVisibility(); }
+  async function setReady(val){ 
+    if(!state.me.saved && val) {
+      showMessage('設定を保存してから準備OKを押してください', 'info');
+      return;
+    }
+    state.me.ready=!!val; 
+    updateReadyButton(); 
+    if(state.net && state.lobbyCode){ 
+      await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ ready:state.me.ready, updatedAt:Date.now() }); 
+    } 
+    renderPlayers(); 
+    updateStartVisibility(); 
+  }
 
   async function createLobby(){
     const code=makeCode(); 
@@ -1007,7 +1041,7 @@
       subscribeLobby(code); 
       ensurePresence(); 
       await sleep(50); 
-      await upsertMe(true); // 新しい気分を生成
+      await upsertMe(true); // 新しい気分を生成して自動保存
     } 
     
     $.code.textContent=code; 
@@ -1041,6 +1075,7 @@
     
     // 自分の準備状態もリセット & 新しい気分を生成
     state.me.ready = false;
+    state.me.saved = false; // 保存状態もリセット
     updateReadyButton();
     await upsertMe(true); // 新しい気分を生成
     

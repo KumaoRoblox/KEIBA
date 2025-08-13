@@ -1,3 +1,4 @@
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
@@ -750,7 +751,24 @@
       return true; // 古い形式の場合はそのまま通す
     });
   }
-  function updateStartVisibility(){ const show=state.isHost && everyoneReady() && !state.started && !state.abandoned; $.start.style.display=show? 'inline-block':'none'; }
+  
+  function updateStartVisibility(){ 
+    const show = state.isHost && everyoneReady() && !state.started && !state.abandoned && 
+                 state.lobbyCode && (state.players && state.players[uid] && state.players[uid].ready);
+    if($.start) {
+      $.start.style.display = show ? 'inline-block' : 'none';
+      console.log('Start button visibility:', { 
+        isHost: state.isHost, 
+        everyoneReady: everyoneReady(), 
+        started: state.started, 
+        abandoned: state.abandoned,
+        lobbyCode: state.lobbyCode,
+        myReady: state.players && state.players[uid] && state.players[uid].ready,
+        show: show
+      });
+    }
+  }
+  
   function updateReadyButton(){ 
     $.ready.textContent=state.me.ready? '準備解除':'準備OK'; 
     $.ready.className=state.me.ready? 'secondary':'success';

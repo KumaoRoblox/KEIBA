@@ -722,25 +722,33 @@
     const playerCount = Object.keys(players).length;
     console.log(`Checking lobby ${code}, player count: ${playerCount}`);
     
-    // 自分が作成したロビーは削除しない
-    if(code === state.lobbyCode && state.isHost) {
-      console.log(`Skipping cleanup for own lobby ${code} (host)`);
-      return;
-    }
-    
     if(playerCount === 0) {
-      console.log(`Lobby ${code} is empty, scheduling deletion in 5 seconds`);
-      // 5秒後に削除（作成直後の誤削除を防ぐ）
-      setTimeout(() => {
-        forceDeleteLobby(code);
-      }, 5000);
-    } else {
-      // 誰かがいる場合、削除予約をキャンセル
-      if(state.emptyLobbyTimeout) {
-        console.log(`Lobby ${code} has players, deletion cancelled`);
-        clearTimeout(state.emptyLobbyTimeout);
-        state.emptyLobbyTimeout = null;
-      }
+      console.log(`Lobby ${code} is empty, scheduling deletion in 3 seconds`);
+      
+      // 3秒後に削除
+      setTimeout(async () => {
+        try {
+          // 再確認してから削除
+          const snapshot = await R('lobbies/'+code+'/players').once('value');
+          const currentPlayers = snapshot.val() || {};
+          const currentPlayerCount = Object.keys(currentPlayers).length;
+          
+          if(currentPlayerCount === 0) {
+            console.log(`Deleting empty lobby ${code}`);
+            await forceDeleteLobby(code);
+            
+            // 自分がそのロビーにいた場合は状態をリセット
+            if(state.lobbyCode === code) {
+              console.log('Resetting own state due to lobby deletion');
+              resetLobbyState();
+            }
+          } else {
+            console.log(`Lobby ${code} now has ${currentPlayerCount} players, deletion cancelled`);
+          }
+        } catch(e) {
+          console.error('Failed to cleanup lobby:', e);
+        }
+      }, 3000);
     }
   }
 
@@ -795,7 +803,7 @@
     
     console.log('Starting lobby cleanup scheduler');
     
-    // 5分ごとに古いロビーをチェック（頻度を下げる）
+    // 2分ごとに古いロビーをチェック
     setInterval(async () => {
       try {
         console.log('Running scheduled lobby cleanup...');
@@ -804,11 +812,11 @@
         const lobbies = snapshot.val() || {};
         
         const now = Date.now();
-        const oneHourAgo = now - (60 * 60 * 1000); // 1時間前に戻す
+        const thirtyMinutesAgo = now - (30 * 60 * 1000); // 30分前
         
         for(const [lobbyCode, lobbyData] of Object.entries(lobbies)) {
           if(!lobbyData) {
-            // データが null の場合のみ削除
+            // データが null の場合は削除
             console.log(`Cleaning up null lobby: ${lobbyCode}`);
             await R('lobbies/'+lobbyCode).remove();
             continue;
@@ -818,10 +826,15 @@
           const players = lobbyData.players || {};
           const playerCount = Object.keys(players).length;
           
-          // 1時間以上経過したロビーのみ削除（空でも作成から時間が経っていない場合は保持）
-          if(createdAt < oneHourAgo && playerCount === 0) {
+          // 30分以上経過した空のロビーを削除
+          if(createdAt < thirtyMinutesAgo && playerCount === 0) {
             console.log(`Cleaning up old empty lobby: ${lobbyCode}`);
             await forceDeleteLobby(lobbyCode);
+          }
+          // または、プレイヤーがいない状態が続いているロビーを削除
+          else if(playerCount === 0) {
+            console.log(`Found empty lobby, will be cleaned up: ${lobbyCode}`);
+            // 空のロビーは次の周期で削除される
           }
         }
         
@@ -829,7 +842,7 @@
       } catch(e) {
         console.error('Scheduled cleanup failed:', e);
       }
-    }, 5 * 60 * 1000); // 5分間隔
+    }, 2 * 60 * 1000); // 2分間隔
   }
 
   const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
@@ -1566,11 +1579,9 @@
     
     console.log('Leaving lobby:', currentLobbyCode, 'was host:', wasHost);
     
-    // 先にリスナーをクリアして復活を防ぐ
-    cleanupLobbyListeners();
-    
     if(state.net && currentLobbyCode){ 
       try {
+        // プレイヤーデータを削除
         await R('lobbies/'+currentLobbyCode+'/players/'+uid).remove(); 
         console.log('Player removed from Firebase');
         
@@ -1582,30 +1593,26 @@
           console.log('Lobby abandoned due to host leaving');
         } 
         
-        // 強制的にロビー全体を削除（ホストの場合）
-        if(wasHost) {
-          console.log('Host leaving, force deleting entire lobby');
-          await forceDeleteLobby(currentLobbyCode);
-        } else {
-          // 離脱後に即座にロビーの削除チェック
-          setTimeout(async () => {
-            try {
-              const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
-              const remainingPlayers = snapshot.val() || {};
-              const playerCount = Object.keys(remainingPlayers).length;
-              
-              console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
-              
-              if(playerCount === 0) {
-                console.log('No players remaining, force deleting lobby');
-                await forceDeleteLobby(currentLobbyCode);
-              }
-            } catch(e) {
-              console.error('Error checking lobby after leaving:', e);
+        // 1秒後にロビーの状態をチェック
+        setTimeout(async () => {
+          try {
+            const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
+            const remainingPlayers = snapshot.val() || {};
+            const playerCount = Object.keys(remainingPlayers).length;
+            
+            console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
+            
+            if(playerCount === 0) {
+              console.log('No players remaining, force deleting lobby');
               await forceDeleteLobby(currentLobbyCode);
             }
-          }, 500);
-        }
+          } catch(e) {
+            console.error('Error checking lobby after leaving:', e);
+            // エラーでも強制削除
+            await forceDeleteLobby(currentLobbyCode);
+          }
+        }, 1000);
+        
       } catch(e) {
         console.error('Error during leave process:', e);
         // エラーでも強制削除
@@ -1613,7 +1620,8 @@
       }
     } 
     
-    // 状態を即座にリセット
+    // 先にリスナーをクリアしてから状態をリセット
+    cleanupLobbyListeners();
     resetLobbyState();
     
     console.log('=== LEAVING LOBBY COMPLETE ===');

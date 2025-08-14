@@ -1495,36 +1495,44 @@
     ];
   }
 
-  // Firebaseリスナーのクリーンアップ
+  // Firebaseリスナーのクリーンアップ（復活阻止強化版）
   function cleanupLobbyListeners() {
+    console.log('🧹 CLEANING UP LOBBY LISTENERS TO PREVENT RESURRECTION');
+    
     if(state.lobbyListeners && state.lobbyListeners.length > 0) {
-      console.log('Cleaning up', state.lobbyListeners.length, 'Firebase listeners');
+      console.log('🔌 Disconnecting', state.lobbyListeners.length, 'Firebase listeners');
+      
       state.lobbyListeners.forEach((item, index) => {
         if(item.ref && item.listener) {
           try {
             item.ref.off('value', item.listener);
-            console.log('Cleaned up listener', index);
+            console.log('✅ Disconnected listener', index);
           } catch(e) {
-            console.log('Error cleaning listener', index, e);
+            console.log('⚠️ Error disconnecting listener', index, e);
           }
         }
       });
+      
       state.lobbyListeners = [];
-      console.log('All listeners cleaned up');
+      console.log('✅ All listeners disconnected and cleared');
+    } else {
+      console.log('ℹ️ No listeners to clean up');
     }
+    
+    console.log('🧹 LISTENER CLEANUP COMPLETE');
   }
 
   function resetLobbyState() {
-    console.log('=== RESETTING LOBBY STATE ===');
+    console.log('=== 🔄 RESETTING LOBBY STATE TO PREVENT RESURRECTION ===');
     
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
       clearTimeout(state.emptyLobbyTimeout);
       state.emptyLobbyTimeout = null;
-      console.log('Cleared empty lobby timeout');
+      console.log('⏰ Cleared empty lobby timeout');
     }
     
-    // Firebaseリスナーをクリア
+    // Firebaseリスナーを完全クリア（復活阻止の最重要処理）
     cleanupLobbyListeners();
     
     // 状態を完全リセット
@@ -1538,7 +1546,7 @@
     state.me.ready = false;
     state.me.saved = false;
     
-    console.log('Reset lobby state from', oldLobbyCode, 'to null');
+    console.log('🗑️ Reset lobby state from', oldLobbyCode, 'to null');
     
     // UI更新
     $.code.textContent = '-';
@@ -1556,13 +1564,23 @@
     sim.reset();
     if(state.ctx) drawRace();
     
-    // URLを確実にクリア
+    // URLを確実にクリア（復活阻止）
     if(window.location.search) {
-      console.log('Clearing URL search params');
+      console.log('🧹 Clearing URL search params to prevent resurrection');
       history.replaceState(null, '', location.pathname);
     }
     
-    console.log('=== LOBBY STATE RESET COMPLETE ===');
+    // 追加で確実にクリーンアップ
+    setTimeout(() => {
+      if(state.lobbyCode) {
+        console.log('⚠️ DETECTED RESURRECTION ATTEMPT - FORCE CLEARING');
+        state.lobbyCode = null;
+        state.isHost = false;
+        state.players = {};
+      }
+    }, 100);
+    
+    console.log('=== ✅ LOBBY STATE RESET COMPLETE - RESURRECTION PREVENTED ===');
   }
 
   async function leaveLobby(){ 
@@ -2319,18 +2337,40 @@
     });
   }
 
-  // URLから自動参加を完全に無効化
-  (function disableAutoJoin(){ 
-    console.log('Auto-join permanently disabled');
+  // URLから自動参加を完全に無効化 + ページロード時の完全クリーンアップ
+  (function preventLobbyResurrection(){ 
+    console.log('=== PREVENTING LOBBY RESURRECTION ===');
     
-    // URLにロビーコードがあっても完全に無視
+    // URLのロビーコードを無条件で削除
     const q=new URLSearchParams(location.search); 
     const room=q.get('room');
     
     if(room) {
-      console.log('Found room code in URL, but auto-join is disabled. Clearing URL.');
+      console.log('❌ DESTROYING room code from URL to prevent resurrection:', room);
       history.replaceState(null, '', location.pathname);
     }
+    
+    // ページ読み込み時点で状態を完全にクリア
+    console.log('🧹 Completely clearing any residual state...');
+    
+    // 強制的に初期状態にリセット
+    state.lobbyCode = null;
+    state.isHost = false;
+    state.players = {};
+    state.started = false;
+    state.results = [];
+    state.abandoned = null;
+    state.me.ready = false;
+    state.me.saved = false;
+    state.lobbyListeners = [];
+    
+    // UIも初期状態に
+    if($.code) $.code.textContent = '-';
+    if($.who) $.who.textContent = '未接続';
+    if($.count) $.count.textContent = '';
+    
+    console.log('✅ State completely cleared on page load');
+    console.log('=== RESURRECTION PREVENTION COMPLETE ===');
     
     updateRoleUI(); 
   })();

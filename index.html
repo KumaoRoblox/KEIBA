@@ -1076,21 +1076,14 @@
   }
 
   async function upsertMe(newMood = false){
-    console.log('upsertMe called:', {
-      started: state.started,
-      lobbyCode: state.lobbyCode,
-      isHost: state.isHost,
-      newMood: newMood
-    });
-    
     if(state.started){ 
       ensurePresence(); 
       return; 
     }
     
-    // ロビーに参加していない場合は何もしない（復活防止の最重要チェック）
+    // ロビーに参加していない場合は何もしない
     if(!state.lobbyCode) {
-      console.log('❌ No lobby code - PREVENTING RESURRECTION');
+      console.log('No lobby code, skipping upsertMe');
       return;
     }
     
@@ -1110,29 +1103,25 @@
     
     if(state.net && state.lobbyCode){
       try {
-        console.log('🔍 Checking if lobby exists before writing...');
         const lobbySnapshot = await R('lobbies/'+state.lobbyCode).once('value');
         if(!lobbySnapshot.exists()) {
-          console.log('❌ Lobby does not exist - ABORTING TO PREVENT RESURRECTION');
+          console.log('Lobby no longer exists during upsertMe, resetting state');
           state.loading = false;
           resetLobbyState();
           return;
         }
         
-        console.log('✅ Lobby exists, proceeding with player data write');
         await R('lobbies/'+state.lobbyCode+'/players/'+uid).set({ 
           name, horse, updatedAt:Date.now(), ready:state.me.ready||false 
         });
-        console.log('✅ Player data written successfully');
         ensurePresence();
       } catch(e) {
-        console.error('❌ Failed to update player data:', e);
+        console.error('Failed to update player data:', e);
         state.loading = false;
         resetLobbyState();
         return;
       }
     } else if(!state.net) {
-      // オフライン時のみローカル処理
       state.players[uid]={ name, horse, ready:state.me.ready||false };
       renderPlayers(); 
       buildLanesFromPlayers(); 
@@ -1495,48 +1484,42 @@
     ];
   }
 
-  // Firebaseリスナーのクリーンアップ（復活阻止強化版）
+  // Firebaseリスナーのクリーンアップ
   function cleanupLobbyListeners() {
-    console.log('🧹 CLEANING UP LOBBY LISTENERS TO PREVENT RESURRECTION');
-    
     if(state.lobbyListeners && state.lobbyListeners.length > 0) {
-      console.log('🔌 Disconnecting', state.lobbyListeners.length, 'Firebase listeners');
-      
+      console.log('Cleaning up', state.lobbyListeners.length, 'Firebase listeners');
       state.lobbyListeners.forEach((item, index) => {
         if(item.ref && item.listener) {
           try {
             item.ref.off('value', item.listener);
-            console.log('✅ Disconnected listener', index);
+            console.log('Cleaned up listener', index);
           } catch(e) {
-            console.log('⚠️ Error disconnecting listener', index, e);
+            console.log('Error cleaning listener', index, e);
           }
         }
       });
-      
       state.lobbyListeners = [];
-      console.log('✅ All listeners disconnected and cleared');
-    } else {
-      console.log('ℹ️ No listeners to clean up');
+      console.log('All listeners cleaned up');
     }
-    
-    console.log('🧹 LISTENER CLEANUP COMPLETE');
   }
 
   function resetLobbyState() {
-    console.log('=== 🔄 RESETTING LOBBY STATE TO PREVENT RESURRECTION ===');
+    console.log('Resetting lobby state');
     
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
       clearTimeout(state.emptyLobbyTimeout);
       state.emptyLobbyTimeout = null;
-      console.log('⏰ Cleared empty lobby timeout');
     }
     
-    // Firebaseリスナーを完全クリア（復活阻止の最重要処理）
+    // Firebaseリスナーをクリア
     cleanupLobbyListeners();
     
-    // 状態を完全リセット
-    const oldLobbyCode = state.lobbyCode;
+    // ローカルストレージをクリア
+    localStorage.removeItem('hostLobby');
+    localStorage.removeItem('hostId');
+    
+    // 状態をリセット
     state.lobbyCode = null;
     state.isHost = false;
     state.players = {};
@@ -1545,8 +1528,6 @@
     state.abandoned = null;
     state.me.ready = false;
     state.me.saved = false;
-    
-    console.log('🗑️ Reset lobby state from', oldLobbyCode, 'to null');
     
     // UI更新
     $.code.textContent = '-';
@@ -1564,27 +1545,14 @@
     sim.reset();
     if(state.ctx) drawRace();
     
-    // URLを確実にクリア（復活阻止）
-    if(window.location.search) {
-      console.log('🧹 Clearing URL search params to prevent resurrection');
-      history.replaceState(null, '', location.pathname);
-    }
+    // URLをクリア
+    history.replaceState(null, '', location.pathname);
     
-    // 追加で確実にクリーンアップ
-    setTimeout(() => {
-      if(state.lobbyCode) {
-        console.log('⚠️ DETECTED RESURRECTION ATTEMPT - FORCE CLEARING');
-        state.lobbyCode = null;
-        state.isHost = false;
-        state.players = {};
-      }
-    }, 100);
-    
-    console.log('=== ✅ LOBBY STATE RESET COMPLETE - RESURRECTION PREVENTED ===');
+    console.log('Lobby state reset completed');
   }
 
   async function leaveLobby(){ 
-    console.log('=== LEAVING LOBBY START ===');
+    console.log('Leaving lobby...');
     
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
@@ -1595,11 +1563,8 @@
     const currentLobbyCode = state.lobbyCode;
     const wasHost = state.isHost;
     
-    console.log('Leaving lobby:', currentLobbyCode, 'was host:', wasHost);
-    
     if(state.net && currentLobbyCode){ 
       try {
-        // プレイヤーデータを削除
         await R('lobbies/'+currentLobbyCode+'/players/'+uid).remove(); 
         console.log('Player removed from Firebase');
         
@@ -1608,8 +1573,13 @@
             started:false, 
             abandoned:{ at:Date.now(), reason:'host_left' } 
           });
-          console.log('Lobby abandoned due to host leaving');
         } 
+        
+        // ホストが離脱する場合はローカルストレージをクリア
+        if(wasHost) {
+          localStorage.removeItem('hostLobby');
+          localStorage.removeItem('hostId');
+        }
         
         // 1秒後にロビーの状態をチェック
         setTimeout(async () => {
@@ -1626,14 +1596,12 @@
             }
           } catch(e) {
             console.error('Error checking lobby after leaving:', e);
-            // エラーでも強制削除
             await forceDeleteLobby(currentLobbyCode);
           }
         }, 1000);
         
       } catch(e) {
         console.error('Error during leave process:', e);
-        // エラーでも強制削除
         await forceDeleteLobby(currentLobbyCode);
       }
     } 
@@ -1641,8 +1609,6 @@
     // 先にリスナーをクリアしてから状態をリセット
     cleanupLobbyListeners();
     resetLobbyState();
-    
-    console.log('=== LEAVING LOBBY COMPLETE ===');
   }
 
   async function abandonRace(reason){ 
@@ -2337,42 +2303,50 @@
     });
   }
 
-  // URLから自動参加を完全に無効化 + ページロード時の完全クリーンアップ
-  (function preventLobbyResurrection(){ 
-    console.log('=== PREVENTING LOBBY RESURRECTION ===');
+  // URLから自動参加（復活阻止機能を削除）
+  (async function autoJoin(){ 
+    console.log('Auto-join process starting...');
     
-    // URLのロビーコードを無条件で削除
-    const q=new URLSearchParams(location.search); 
-    const room=q.get('room');
-    
-    if(room) {
-      console.log('❌ DESTROYING room code from URL to prevent resurrection:', room);
-      history.replaceState(null, '', location.pathname);
+    // Firebase初期化を待つ
+    if(state.net) {
+      const initialized = await waitForFirebase();
+      if(!initialized) {
+        console.error('Firebase initialization timeout during auto-join');
+        updateRoleUI();
+        return;
+      }
     }
     
-    // ページ読み込み時点で状態を完全にクリア
-    console.log('🧹 Completely clearing any residual state...');
+    const q=new URLSearchParams(location.search); 
+    const room=(q.get('room')||'').split('').filter(ch=>ch>='0'&&ch<='9').join(''); 
     
-    // 強制的に初期状態にリセット
-    state.lobbyCode = null;
-    state.isHost = false;
-    state.players = {};
-    state.started = false;
-    state.results = [];
-    state.abandoned = null;
-    state.me.ready = false;
-    state.me.saved = false;
-    state.lobbyListeners = [];
-    
-    // UIも初期状態に
-    if($.code) $.code.textContent = '-';
-    if($.who) $.who.textContent = '未接続';
-    if($.count) $.count.textContent = '';
-    
-    console.log('✅ State completely cleared on page load');
-    console.log('=== RESURRECTION PREVENTION COMPLETE ===');
-    
-    updateRoleUI(); 
+    if(room){ 
+      const roomCode = room.padStart(4,'0');
+      console.log('Auto-joining room from URL:', roomCode);
+      
+      // ネットワーク接続がある場合、ロビーの存在確認
+      if(state.net) {
+        try {
+          const lobbySnapshot = await R('lobbies/'+roomCode).once('value');
+          if(lobbySnapshot.exists()) {
+            console.log('Lobby exists, proceeding with auto-join');
+            await joinLobby(roomCode);
+          } else {
+            console.log('Lobby in URL does not exist, clearing URL');
+            history.replaceState(null, '', location.pathname);
+            updateRoleUI();
+          }
+        } catch(e) {
+          console.error('Error checking lobby from URL:', e);
+          history.replaceState(null, '', location.pathname);
+          updateRoleUI();
+        }
+      } else {
+        await joinLobby(roomCode);
+      }
+    } else { 
+      updateRoleUI(); 
+    } 
   })();
 
   // 名前/馬名ローカル保存

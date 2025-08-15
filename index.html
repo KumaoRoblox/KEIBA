@@ -220,6 +220,7 @@
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <script>
@@ -320,11 +321,15 @@
     if(!window.firebase||!firebaseConfig.apiKey){$.onlineBadge.textContent='オフライン（デモ）';return;}
     try{
       firebase.initializeApp(firebaseConfig);
+      firebase.auth().signInAnonymously().catch(console.error);
       state.db=firebase.database();
       state.net=true;
       $.onlineBadge.textContent='オンライン有効';
       startLobbyCleanupScheduler();
-    }catch(e){$.onlineBadge.textContent='オフライン';}
+    }catch(e){
+      console.error('Firebase init error:',e);
+      $.onlineBadge.textContent='オフライン';
+    }
   }
   initFirebase();
 

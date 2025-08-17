@@ -2067,67 +2067,98 @@
       return; 
     } 
     
-    // 縦向き楕円コースの設定
+    // 縦向きコースの設定（上下が半円で左右が直線）
     const centerX = c.width / 2;
     const centerY = c.height / 2;
     const trackHeight = Math.min(c.height * 0.8, c.width * 1.4);
     const trackWidth = trackHeight * 0.6;
-    const radiusX = trackWidth / 2;
-    const radiusY = trackHeight / 2;
-    
+    const radius = trackWidth / 2;
+    const straightLength = trackHeight - trackWidth; // 上下の半円を除いた直線部分
+
     const laneCount = lanes.length;
-    const laneSpacing = Math.min(12*dpr, radiusX * 0.15);
-    
+    const laneSpacing = Math.min(12*dpr, radius * 0.15);
+
     // コース描画
     for(let i = 0; i <= laneCount; i++) {
-      const currentRadiusX = radiusX - i * laneSpacing;
-      const currentRadiusY = radiusY - i * laneSpacing;
-      
-      if(currentRadiusX > 0 && currentRadiusY > 0) {
+      const r = radius - i * laneSpacing;
+      const s = straightLength - 2 * i * laneSpacing;
+      const halfS = s / 2;
+
+      if(r > 0 && s >= 0) {
         ctx.strokeStyle = i === 0 ? 'rgba(108,255,128,.6)' : 'rgba(255,255,255,.15)';
         ctx.lineWidth = i === 0 ? 4*dpr : 1*dpr;
         ctx.beginPath();
-        ctx.ellipse(centerX, centerY, currentRadiusX, currentRadiusY, 0, 0, 2 * Math.PI);
+        ctx.moveTo(centerX + r, centerY - halfS);
+        ctx.lineTo(centerX + r, centerY + halfS);
+        ctx.arc(centerX, centerY + halfS, r, 0, Math.PI, false); // 下側半円
+        ctx.lineTo(centerX - r, centerY - halfS);
+        ctx.arc(centerX, centerY - halfS, r, Math.PI, 0, false); // 上側半円
+        ctx.closePath();
         ctx.stroke();
       }
     }
-    
+
     // スタート/ゴールライン
     ctx.strokeStyle = 'rgba(255,204,108,.9)';
     ctx.lineWidth = 6*dpr;
     ctx.setLineDash([]);
     ctx.beginPath();
     const lineLength = laneSpacing * (laneCount + 1);
-    ctx.moveTo(centerX + radiusX - lineLength, centerY);
-    ctx.lineTo(centerX + radiusX + lineLength, centerY);
+    ctx.moveTo(centerX + radius - lineLength, centerY);
+    ctx.lineTo(centerX + radius + lineLength, centerY);
     ctx.stroke();
-    
+
     // スタート/ゴール表示
     ctx.fillStyle = 'rgba(255,204,108,.9)';
     ctx.font = `bold ${16*dpr}px system-ui`;
     ctx.textAlign = 'center';
-    ctx.fillText('🏁 START / GOAL', centerX + radiusX + 60*dpr, centerY);
-    
+    ctx.fillText('🏁 START / GOAL', centerX + radius + 60*dpr, centerY);
+
     // 距離と周回数表示
     ctx.fillStyle = 'rgba(255,255,255,.8)';
     ctx.font = `${14*dpr}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(`${totalLaps}周制 (1周 ${L}m)`, centerX, centerY - radiusY - 45*dpr);
-    
+    ctx.fillText(`${totalLaps}周制 (1周 ${L}m)`, centerX, centerY - (straightLength/2 + radius) - 45*dpr);
+
     // 各馬の描画
     lanes.forEach((ln, i) => {
-      const laneRadiusX = radiusX - (i + 0.5) * laneSpacing;
-      const laneRadiusY = radiusY - (i + 0.5) * laneSpacing;
-      
-      if(laneRadiusX <= 0 || laneRadiusY <= 0) return;
-      
+      const r = radius - (i + 0.5) * laneSpacing;
+      const s = straightLength - 2 * (i + 0.5) * laneSpacing;
+      if(r <= 0 || s < 0) return;
+      const halfS = s / 2;
+
       const pos = getPos(ln.id);
       const laps = getLaps(ln.id);
       const progress = Math.max(0, Math.min(1, pos / L));
-      
-      const angle = progress * 2 * Math.PI;
-      const x = centerX + laneRadiusX * Math.cos(angle);
-      const y = centerY + laneRadiusY * Math.sin(angle);
+      const perimeter = 2 * s + 2 * Math.PI * r;
+      const dist = progress * perimeter;
+
+      let x, y;
+      if(dist < halfS) {
+        // 右側直線（下方向）
+        x = centerX + r;
+        y = centerY + dist;
+      } else if(dist < halfS + Math.PI * r) {
+        // 下側半円
+        const angle = (dist - halfS) / r;
+        x = centerX + r * Math.cos(angle);
+        y = centerY + halfS + r * Math.sin(angle);
+      } else if(dist < halfS + Math.PI * r + s) {
+        // 左側直線（上方向）
+        const d = dist - (halfS + Math.PI * r);
+        x = centerX - r;
+        y = centerY + halfS - d;
+      } else if(dist < halfS + Math.PI * r + s + Math.PI * r) {
+        // 上側半円
+        const angle = Math.PI + (dist - (halfS + Math.PI * r + s)) / r;
+        x = centerX + r * Math.cos(angle);
+        y = centerY - halfS + r * Math.sin(angle);
+      } else {
+        // 右側直線（上からスタート地点へ）
+        const d = dist - (halfS + Math.PI * r + s + Math.PI * r);
+        x = centerX + r;
+        y = centerY - halfS + d;
+      }
       
       const p = state.players[ln.id];
       const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';

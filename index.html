@@ -731,25 +731,26 @@
   // ロビー自動削除機能
   function checkAndCleanupLobby(code, players) {
     if(!state.net || !code) return;
-    
+
     const playerCount = Object.keys(players).length;
     console.log(`Checking lobby ${code}, player count: ${playerCount}`);
-    
+
     if(playerCount === 0) {
-      console.log(`Lobby ${code} is empty, scheduling deletion in 3 seconds`);
-      
-      // 3秒後に削除
-      setTimeout(async () => {
+      if(state.emptyLobbyTimeout) clearTimeout(state.emptyLobbyTimeout);
+      console.log(`Lobby ${code} is empty, scheduling deletion in 10 seconds`);
+
+      // 10秒後に削除
+      state.emptyLobbyTimeout = setTimeout(async () => {
         try {
           // 再確認してから削除
           const snapshot = await R('lobbies/'+code+'/players').once('value');
           const currentPlayers = snapshot.val() || {};
           const currentPlayerCount = Object.keys(currentPlayers).length;
-          
+
           if(currentPlayerCount === 0) {
             console.log(`Deleting empty lobby ${code}`);
             await forceDeleteLobby(code);
-            
+
             // 自分がそのロビーにいた場合は状態をリセット
             if(state.lobbyCode === code) {
               console.log('Resetting own state due to lobby deletion');
@@ -760,8 +761,13 @@
           }
         } catch(e) {
           console.error('Failed to cleanup lobby:', e);
+        } finally {
+          state.emptyLobbyTimeout = null;
         }
-      }, 3000);
+      }, 10000);
+    } else if(state.emptyLobbyTimeout) {
+      clearTimeout(state.emptyLobbyTimeout);
+      state.emptyLobbyTimeout = null;
     }
   }
 
@@ -1319,21 +1325,26 @@
     setTimeout(() => overlay.remove(), 500);
   }
 
-  async function setReady(val){ 
+  async function setReady(val){
     if(!state.me.saved && val) {
       showMessage('設定を保存してから準備OKを押してください', 'info');
       return;
     }
-    state.me.ready=!!val; 
-    updateReadyButton(); 
-    if(state.net && state.lobbyCode){ 
-      await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({ 
-        ready:state.me.ready, 
-        updatedAt:Date.now() 
-      }); 
-    } 
-    renderPlayers(); 
-    updateStartVisibility(); 
+    state.me.ready = !!val;
+    // ローカルのプレイヤー情報を更新して即時反映
+    state.players[uid] = state.players[uid] || {};
+    state.players[uid].ready = state.me.ready;
+
+    updateReadyButton();
+
+    if(state.net && state.lobbyCode){
+      await R('lobbies/'+state.lobbyCode+'/players/'+uid).update({
+        ready:state.me.ready,
+        updatedAt:Date.now()
+      });
+    }
+    renderPlayers();
+    updateStartVisibility();
   }
 
   async function createLobby(){
@@ -1368,9 +1379,23 @@
     updateRoleUI();
   }
 
-  async function joinLobby(code){ 
-    state.lobbyCode=code; 
-    
+  async function joinLobby(code){
+    if(state.net){
+      try{
+        const lobbySnap = await R('lobbies/'+code).once('value');
+        if(!lobbySnap.exists()){
+          alert('ロビーが存在しません');
+          return;
+        }
+      }catch(e){
+        console.error('Failed to check lobby existence:', e);
+        alert('ロビーが存在しません');
+        return;
+      }
+    }
+
+    state.lobbyCode = code;
+
     const savedHostLobby = localStorage.getItem('hostLobby');
     const savedHostId = localStorage.getItem('hostId');
     
@@ -1643,15 +1668,15 @@
           localStorage.removeItem('hostId');
         }
         
-        // 1秒後にロビーの状態をチェック
+        // 10秒後にロビーの状態をチェック
         setTimeout(async () => {
           try {
             const snapshot = await R('lobbies/'+currentLobbyCode+'/players').once('value');
             const remainingPlayers = snapshot.val() || {};
             const playerCount = Object.keys(remainingPlayers).length;
-            
+
             console.log(`After leaving, lobby ${currentLobbyCode} has ${playerCount} players`);
-            
+
             if(playerCount === 0) {
               console.log('No players remaining, force deleting lobby');
               await forceDeleteLobby(currentLobbyCode);
@@ -1660,7 +1685,7 @@
             console.error('Error checking lobby after leaving:', e);
             await forceDeleteLobby(currentLobbyCode);
           }
-        }, 1000);
+        }, 10000);
         
       } catch(e) {
         console.error('Error during leave process:', e);

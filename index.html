@@ -442,11 +442,18 @@
             <div class="grid2">
               <div>
                 <label>レース名</label>
-                <input type="text" id="raceTitle" placeholder="例：スプリングカップ" value="みんなで競馬" />
+                <div class="row">
+                  <input type="text" id="racePrefix" placeholder="例：スプリング" value="みんなで競馬" />
+                  <select id="raceSuffix">
+                    <option value="賞">賞</option>
+                    <option value="カップ" selected>カップ</option>
+                    <option value="ステークス">ステークス</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label>周回数</label>
-                <input type="number" id="totalLaps" min="1" max="10" value="3" />
+                <input type="number" id="totalLaps" min="1" max="3" value="3" />
               </div>
             </div>
           </div>
@@ -585,7 +592,7 @@
     started:false, seed:null, results:[],
     ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
     lanes:[], lastState:null, trackLen:400,
-    totalLaps:3, raceTitle:"みんなで競馬",
+    totalLaps:3, racePrefix:"みんなで競馬", raceSuffix:"カップ", raceTitle:"みんなで競馬カップ",
     racePlayerIds:[],
     abandoned:null,
     loading:false,
@@ -602,7 +609,7 @@
     save: el('saveHorseBtn'), ready: el('readyBtn'), start: el('startBtn'), playersList: el('playersList'),
     canvas: el('race'), overlay: el('overlay'), count: el('countDown'), results: el('results'),
     leave: el('leaveBtn'), reset: el('resetBtn'), abort: el('abortBtn'),
-    remainingPoints: el('remainingPoints'), raceTitle: el('raceTitle'), totalLaps: el('totalLaps'),
+    remainingPoints: el('remainingPoints'), racePrefix: el('racePrefix'), raceSuffix: el('raceSuffix'), totalLaps: el('totalLaps'),
     hostSettings: el('hostSettings'), raceHeader: el('raceHeader')
   };
 
@@ -883,7 +890,7 @@
   }
 
   function applyLockState(){
-    [$.sTop,$.sAcc,$.sSta,$.sCorner,$.sFinish,$.hColor,$.save,$.raceTitle,$.totalLaps].forEach(e=>{ 
+    [$.sTop,$.sAcc,$.sSta,$.sCorner,$.sFinish,$.hColor,$.save,$.racePrefix,$.raceSuffix,$.totalLaps].forEach(e=>{
       if(e) e.disabled = !!state.started; 
     });
     
@@ -1183,7 +1190,7 @@
       text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-bottom: 20px;
       text-align: center; animation: titleGlow 2s ease-in-out infinite alternate;
     `;
-    title.textContent = state.raceTitle || 'みんなで競馬';
+    title.textContent = state.raceTitle || 'みんなで競馬カップ';
     
     const subtitle = document.createElement('div');
     subtitle.style.cssText = `
@@ -1399,20 +1406,26 @@
       state.seed=v.seed||0;
       state.trackLen=v.trackLen||400;
       state.totalLaps=v.totalLaps||3;
-      state.raceTitle=v.raceTitle||'みんなで競馬';
+      state.raceTitle=v.raceTitle||'みんなで競馬カップ';
+      const suffixes=['賞','カップ','ステークス'];
+      state.raceSuffix=suffixes.find(s=>state.raceTitle.endsWith(s))||'カップ';
+      state.racePrefix=state.raceTitle.slice(0,state.raceTitle.length-state.raceSuffix.length)||'みんなで競馬';
       state.abandoned=v.abandoned||null;
 
       if(wasStarted && !state.started){
         await upsertMe(true);
       }
-      
+
       // レース設定の同期（ホストの設定を他の参加者にも反映）
       // 入力中でない場合のみ値を上書き（フォーカスされていない場合）
       if($.totalLaps && document.activeElement !== $.totalLaps) {
         $.totalLaps.value = state.totalLaps;
       }
-      if($.raceTitle && document.activeElement !== $.raceTitle) {
-        $.raceTitle.value = state.raceTitle;
+      if($.racePrefix && document.activeElement !== $.racePrefix) {
+        $.racePrefix.value = state.racePrefix;
+      }
+      if($.raceSuffix && document.activeElement !== $.raceSuffix) {
+        $.raceSuffix.value = state.raceSuffix;
       }
       if($.raceHeader) $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
       
@@ -1721,7 +1734,9 @@
       if(state.isHost){
         // レース設定を取得
         state.totalLaps = parseInt($.totalLaps?.value) || 3;
-        state.raceTitle = $.raceTitle?.value?.trim() || 'みんなで競馬';
+        state.racePrefix = $.racePrefix?.value?.trim() || 'みんなで競馬';
+        state.raceSuffix = $.raceSuffix?.value || 'カップ';
+        state.raceTitle = state.racePrefix + state.raceSuffix;
 
         if(state.net){
           await R('lobbies/'+state.lobbyCode).update({
@@ -1737,7 +1752,10 @@
         if(state.lobby) {
           state.seed = state.lobby.seed || 0;
           state.totalLaps = state.lobby.totalLaps || 3;
-          state.raceTitle = state.lobby.raceTitle || 'みんなで競馬';
+          state.raceTitle = state.lobby.raceTitle || 'みんなで競馬カップ';
+          const suffixes=['賞','カップ','ステークス'];
+          state.raceSuffix=suffixes.find(s=>state.raceTitle.endsWith(s))||'カップ';
+          state.racePrefix=state.raceTitle.slice(0,state.raceTitle.length-state.raceSuffix.length)||'みんなで競馬';
         }
       }
       
@@ -2314,35 +2332,24 @@
   });
 
   // レース設定の変更監視（ホストのみ）
-  if($.raceTitle) {
-    $.raceTitle.addEventListener('input', () => {
+  if($.racePrefix && $.raceSuffix) {
+    const syncTitle = () => {
       if(!state.isHost) return; // ホストのみ変更可能
-      
-      // 空文字の場合はデフォルト値を設定しない（入力中を考慮）
-      const inputValue = $.raceTitle.value;
-      state.raceTitle = inputValue || 'みんなで競馬'; // 空の場合のみデフォルト
-      
-      // ヘッダーは常に何かしらの値を表示（空の場合はデフォルト）
-      const displayTitle = inputValue || 'みんなで競馬';
-      $.raceHeader.textContent = `${displayTitle} (${state.totalLaps}周制)`;
-      
-      // Firebaseに同期（空文字でも同期して、他の参加者の入力フィールドも同期）
+      state.racePrefix = $.racePrefix.value.trim() || 'みんなで競馬';
+      state.raceSuffix = $.raceSuffix.value;
+      state.raceTitle = state.racePrefix + state.raceSuffix;
+      $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
       if(state.net && state.lobbyCode) {
-        R('lobbies/'+state.lobbyCode).update({ raceTitle: inputValue || 'みんなで競馬' });
+        R('lobbies/'+state.lobbyCode).update({ raceTitle: state.raceTitle });
       }
-    });
-    
-    // フォーカスが外れた時に空文字だったらデフォルト値を設定
-    $.raceTitle.addEventListener('blur', () => {
+    };
+    $.racePrefix.addEventListener('input', syncTitle);
+    $.raceSuffix.addEventListener('change', syncTitle);
+    $.racePrefix.addEventListener('blur', () => {
       if(!state.isHost) return;
-      if(!$.raceTitle.value.trim()) {
-        $.raceTitle.value = 'みんなで競馬';
-        state.raceTitle = 'みんなで競馬';
-        $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
-        
-        if(state.net && state.lobbyCode) {
-          R('lobbies/'+state.lobbyCode).update({ raceTitle: state.raceTitle });
-        }
+      if(!$.racePrefix.value.trim()) {
+        $.racePrefix.value = 'みんなで競馬';
+        syncTitle();
       }
     });
   }
@@ -2350,9 +2357,10 @@
   if($.totalLaps) {
     $.totalLaps.addEventListener('input', () => {
       if(!state.isHost) return; // ホストのみ変更可能
-      state.totalLaps = parseInt($.totalLaps.value) || 3;
+      state.totalLaps = Math.max(1, Math.min(3, parseInt($.totalLaps.value) || 3));
+      $.totalLaps.value = state.totalLaps;
       $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
-      
+
       // Firebaseに即座に同期（ホストのみ）
       if(state.net && state.lobbyCode) {
         R('lobbies/'+state.lobbyCode).update({ totalLaps: state.totalLaps });

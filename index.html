@@ -992,17 +992,17 @@
     $.results.innerHTML='<b>結果</b>'+ res.map(r=>`<div class="row" style="justify-content:space-between"><span>${r.rank}. <b>${r.player}</b> <span class="muted">/ ${r.horse}</span></span> <span class="badge" style="border-color:${r.color}">${r.color}</span></div>`).join('');
   }
 
-  function everyoneReady(){ 
-    const ps = state.players || {}; 
-    const ids = Object.keys(ps); 
-    if(!ids.length) return false; 
-    
+  function everyoneReady(){
+    const ps = { ...(state.players||{}) };
+    ps[uid] = ps[uid] || {};
+    ps[uid].ready = state.me.ready;
+    ps[uid].horse = state.me.horse;
+    const ids = Object.keys(ps);
+    if(!ids.length) return false;
+
     return ids.every(id => {
       const player = ps[id];
-      if(!player) return false;
-
-      const ready = id === uid ? state.me.ready : player.ready;
-      if(!ready) return false;
+      if(!player || !player.ready) return false;
 
       if(player.horse?.points) {
         const totalPoints = player.horse.points.speed + player.horse.points.accel +
@@ -1014,19 +1014,18 @@
     });
   }
   
-  function updateStartVisibility(){ 
-    // ホストの準備状態をFirebaseから直接確認
-    const hostReady = state.players?.[uid]?.ready ?? state.me.ready;
+  function updateStartVisibility(){
+    const hostReady = state.me.ready;
     const show = state.isHost && everyoneReady() && !state.started && !state.abandoned &&
                  state.lobbyCode && hostReady;
-    
+
     if($.start) {
       $.start.style.display = show ? 'inline-block' : 'none';
-      console.log('Start button check:', { 
-        isHost: state.isHost, 
-        everyoneReady: everyoneReady(), 
-        hostReady: hostReady,
-        show: show
+      console.log('Start button check:', {
+        isHost: state.isHost,
+        everyoneReady: everyoneReady(),
+        hostReady,
+        show
       });
     }
   }
@@ -1085,6 +1084,7 @@
       if(state.isHost){
         const lref=R('lobbies/'+state.lobbyCode);
         if(lref) {
+          lref.onDisconnect().remove();
           lref.child('started').onDisconnect().set(false);
           lref.child('abandoned').onDisconnect().set({ at: Date.now(), reason:'host_disconnected' });
         }
@@ -1105,6 +1105,7 @@
       if(state.isHost){
         const lref=R('lobbies/'+state.lobbyCode);
         if(lref){
+          lref.onDisconnect().cancel();
           lref.child('started').onDisconnect().cancel();
           lref.child('abandoned').onDisconnect().cancel();
         }
@@ -1414,15 +1415,18 @@
       try{
         const snap = await R('lobbies/'+code+'/players').once('value');
         state.players = snap.val()||{};
+        if(!state.players[uid]) state.players[uid] = {};
       }catch(e){
         console.error('Failed to fetch player colors:', e);
       }
       await upsertMe(true);
+      renderPlayers();
+      updateStartVisibility();
     }
     
-    $.code.textContent=code; 
-    history.replaceState(null,'', location.pathname+`?room=${code}`); 
-    updateRoleUI(); 
+    $.code.textContent=code;
+    history.replaceState(null,'', location.pathname+`?room=${code}`);
+    updateRoleUI();
   }
 
   async function subscribeLobby(code){ 

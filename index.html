@@ -1207,8 +1207,9 @@
     overlay.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: linear-gradient(135deg, #1a1a2e, #16213e);
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
       z-index: 10000; animation: fadeIn 0.5s ease-out;
+      overflow-y: auto; padding: 40px 20px;
     `;
     
     const title = document.createElement('div');
@@ -1221,8 +1222,10 @@
     
     const horseList = document.createElement('div');
     horseList.style.cssText = `
-      display: flex; flex-direction: column; gap: 20px;
-      max-width: 600px; width: 90%;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      max-width: 90vw; width: 90%;
+      max-height: 70vh; overflow-y: auto;
     `;
     
     state.lanes.forEach((lane, index) => {
@@ -1234,6 +1237,7 @@
         border: 2px solid ${player.horse?.color || '#7dd3fc'};
         border-radius: 15px; padding: 20px; display: flex; align-items: center; gap: 20px;
         animation: slideIn 0.5s ease-out ${index * 0.2}s both; backdrop-filter: blur(10px);
+        width: 100%;
       `;
       
       const colorBox = document.createElement('div');
@@ -1789,6 +1793,7 @@
         
         const raceProgress = Math.max(0, Math.min(1, (H.totalDistance || 0) / (L * totalLaps)));
         const lapProgress = Math.max(0, Math.min(1, (H.x || 0) / L));
+        const isFinalLap = H.laps >= totalLaps - 1;
         
         // コーナー判定
         const angle = lapProgress * 2 * Math.PI;
@@ -1860,33 +1865,35 @@
         if(isNaN(H.x)) H.x = oldX;
         if(isNaN(H.totalDistance)) H.totalDistance = Math.max(0, oldX);
         
-        // スタミナ消費
-        let staminaCost = 0.4 + Math.pow(H.v / 15, 1.5) * 1.2;
-        if(isInCorner) staminaCost *= 1.2;
-        if(isFinalStraight && raceProgress > 0.8) staminaCost *= 1.4;
-        
-        const accelPenalty = Math.max(0, (adjustedAccel - 1) * 0.2);
-        staminaCost += accelPenalty;
-        
-        const staminaDecrease = staminaCost * dt * 15;
-        if(!isNaN(staminaDecrease)) {
-          H.s -= staminaDecrease;
-          H.s = Math.max(0, H.s);
-        }
-        
-        // スタミナ回復
-        if(H.v < adjustedTopSpeed * 0.85) {
-          const recoveryRate = (adjustedTopSpeed * 0.85 - H.v) / adjustedTopSpeed * 4.0;
-          const recovery = recoveryRate * dt * 60;
-          if(!isNaN(recovery)) {
-            H.s = Math.min(H.maxS, H.s + recovery);
+        if(isFinalLap){
+          // スタミナ消費
+          let staminaCost = 0.4 + Math.pow(H.v / 15, 1.5) * 1.2;
+          if(isInCorner) staminaCost *= 1.2;
+          if(isFinalStraight && raceProgress > 0.8) staminaCost *= 1.4;
+
+          const accelPenalty = Math.max(0, (adjustedAccel - 1) * 0.2);
+          staminaCost += accelPenalty;
+
+          const staminaDecrease = staminaCost * dt * 15;
+          if(!isNaN(staminaDecrease)) {
+            H.s -= staminaDecrease;
+            H.s = Math.max(0, H.s);
           }
-        }
-        
-        // スタミナ切れ処理
-        if(H.s <= 0) {
-          H.v *= 0.99;
-          H.v = Math.max(adjustedTopSpeed * 0.35, H.v);
+
+          // スタミナ回復
+          if(H.v < adjustedTopSpeed * 0.85) {
+            const recoveryRate = (adjustedTopSpeed * 0.85 - H.v) / adjustedTopSpeed * 4.0;
+            const recovery = recoveryRate * dt * 60;
+            if(!isNaN(recovery)) {
+              H.s = Math.min(H.maxS, H.s + recovery);
+            }
+          }
+
+          // スタミナ切れ処理
+          if(H.s <= 0) {
+            H.v *= 0.99;
+            H.v = Math.max(adjustedTopSpeed * 0.35, H.v);
+          }
         }
         
         // 1周判定

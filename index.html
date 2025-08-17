@@ -1345,14 +1345,19 @@
       state.isHost = false;
     }
     
-    updateHeader(); 
-    
-    if(state.net){ 
-      subscribeLobby(code); 
-      ensurePresence(); 
-      await sleep(100);
+    updateHeader();
+
+    if(state.net){
+      subscribeLobby(code);
+      ensurePresence();
+      try{
+        const snap = await R('lobbies/'+code+'/players').once('value');
+        state.players = snap.val()||{};
+      }catch(e){
+        console.error('Failed to fetch player colors:', e);
+      }
       await upsertMe(true);
-    } 
+    }
     
     $.code.textContent=code; 
     history.replaceState(null,'', location.pathname+`?room=${code}`); 

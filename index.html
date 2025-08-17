@@ -1365,7 +1365,7 @@
     const resultsRef = R('lobbies/'+code+'/results');
     
     // ロビー情報の監視
-    const lobbyListener = lobbyRef.on('value', snap=>{
+    const lobbyListener = lobbyRef.on('value', async snap=>{
       const v=snap.val()||{};
       
       if(!v || Object.keys(v).length === 0) {
@@ -1383,13 +1383,17 @@
       }
       
       const wasStarted = state.started;
-      state.lobby=v; 
-      state.started=!!v.started; 
-      state.seed=v.seed||0; 
-      state.trackLen=v.trackLen||400; 
+      state.lobby=v;
+      state.started=!!v.started;
+      state.seed=v.seed||0;
+      state.trackLen=v.trackLen||400;
       state.totalLaps=v.totalLaps||3;
       state.raceTitle=v.raceTitle||'みんなで競馬';
       state.abandoned=v.abandoned||null;
+
+      if(wasStarted && !state.started){
+        await upsertMe(true);
+      }
       
       // レース設定の同期（ホストの設定を他の参加者にも反映）
       // 入力中でない場合のみ値を上書き（フォーカスされていない場合）
@@ -1669,46 +1673,55 @@
       $.results.style.display='none'; 
       $.count.textContent=''; 
     },
-    setupFromPlayers(){ 
+    setupFromPlayers(){
       state.lanes = [];
-      Object.entries(state.players||{}).forEach(([id,p])=>{ 
-        const h=p.horse||{}; 
+      const ids = Object.keys(state.players||{});
+      const rand = randSeeded(state.seed || Date.now());
+      for(let i = ids.length - 1; i > 0; i--){
+        const j = Math.floor(rand() * (i + 1));
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+      }
+      ids.forEach(id=>{
+        const p=state.players[id]||{};
+        const h=p.horse||{};
         const maxStamina = Math.max(200, h.stamina||400);
-        this.horses[id]={ 
-          id, 
-          name:p.name||id.slice(0,4), 
-          horse:h, 
-          x: 0, v: 0, 
-          s: maxStamina, maxS: maxStamina, 
+        const startX = rand()*state.trackLen;
+        this.horses[id]={
+          id,
+          name:p.name||id.slice(0,4),
+          horse:h,
+          x: startX, v: 0,
+          s: maxStamina, maxS: maxStamina,
           done: false, laps: 0, totalDistance: 0
-        }; 
-        state.lanes.push({id, color:h.color||'#fff'}); 
-      }); 
+        };
+        state.lanes.push({id, color:h.color||'#fff'});
+      });
     },
-    async start(){ 
-      this.reset(); 
-      this.setupFromPlayers(); 
-      state.started=true; 
-      state.abandoned=null; 
-      
-      if(state.isHost){ 
-        state.seed=Math.floor(Math.random()*1e9); 
-        state.racePlayerIds=Object.keys(state.players||{}); 
-        
+    async start(){
+      this.reset();
+      if(state.isHost){
+        state.seed=Math.floor(Math.random()*1e9);
+        state.racePlayerIds=Object.keys(state.players||{});
+      }
+      this.setupFromPlayers();
+      state.started=true;
+      state.abandoned=null;
+
+      if(state.isHost){
         // レース設定を取得
         state.totalLaps = parseInt($.totalLaps?.value) || 3;
         state.raceTitle = $.raceTitle?.value?.trim() || 'みんなで競馬';
-        
-        if(state.net){ 
-          await R('lobbies/'+state.lobbyCode).update({ 
-            started:true, 
-            abandoned:null, 
-            seed:state.seed, 
+
+        if(state.net){
+          await R('lobbies/'+state.lobbyCode).update({
+            started:true,
+            abandoned:null,
+            seed:state.seed,
             trackLen:state.trackLen,
             totalLaps:state.totalLaps,
             raceTitle:state.raceTitle
-          }); 
-        } 
+          });
+        }
       } else {
         if(state.lobby) {
           state.seed = state.lobby.seed || 0;

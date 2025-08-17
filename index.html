@@ -2134,8 +2134,8 @@
     // 各馬の描画
     lanes.forEach((ln, i) => {
       const r = radius - (i + 0.5) * laneSpacing;
-      const s = straightLength - 2 * (i + 0.5) * laneSpacing;
-      if(r <= 0 || s < 0) return;
+      const s = straightLength;
+      if(r <= 0) return;
       const halfS = s / 2;
 
       const pos = getPos(ln.id);
@@ -2170,7 +2170,7 @@
         x = centerX + r;
         y = centerY - halfS + d;
       }
-      
+
       const p = state.players[ln.id];
       const col = (state.lastState?.colors?.[ln.id]) || (p?.horse?.color) || ln.color || '#7dd3fc';
       

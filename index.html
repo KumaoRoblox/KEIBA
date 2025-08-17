@@ -1225,7 +1225,9 @@
       max-width: 600px; width: 90%;
     `;
     
-    Object.entries(state.players || {}).forEach(([id, player], index) => {
+    state.lanes.forEach((lane, index) => {
+      const id = lane.id;
+      const player = state.players[id];
       const horseCard = document.createElement('div');
       horseCard.style.cssText = `
         background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
@@ -1685,7 +1687,7 @@
         const p=state.players[id]||{};
         const h=p.horse||{};
         const maxStamina = Math.max(200, h.stamina||400);
-        const startX = rand()*state.trackLen;
+        const startX = 0;
         this.horses[id]={
           id,
           name:p.name||id.slice(0,4),

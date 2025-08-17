@@ -444,7 +444,7 @@
               <div>
                 <label>レース名</label>
                 <div class="row">
-                  <input type="text" id="racePrefix" placeholder="例：スプリング" value="みんなで競馬" />
+                  <input type="text" id="racePrefix" placeholder="例：スプリング" />
                   <select id="raceSuffix">
                     <option value="賞">賞</option>
                     <option value="カップ" selected>カップ</option>
@@ -597,7 +597,7 @@
     started:false, seed:null, results:[],
     ctx:null, canvas:null, dpr:Math.min(2, window.devicePixelRatio||1),
     lanes:[], lastState:null, trackLen:400,
-    totalLaps:3, racePrefix:"みんなで競馬", raceSuffix:"カップ", raceTitle:"みんなで競馬カップ",
+    totalLaps:3, racePrefix:"", raceSuffix:"カップ", raceTitle:"カップ",
     racePlayerIds:[],
     abandoned:null,
     loading:false,
@@ -648,7 +648,8 @@
   
   function updateReadyButtonState() {
     if($.ready) {
-      const canReady = state.me.saved && !state.started;
+      const hasRaceName = state.racePrefix.trim().length > 0;
+      const canReady = state.me.saved && !state.started && hasRaceName;
       $.ready.disabled = !canReady;
       $.ready.style.opacity = canReady ? '1' : '0.5';
     }
@@ -1195,7 +1196,7 @@
       text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-bottom: 20px;
       text-align: center; animation: titleGlow 2s ease-in-out infinite alternate;
     `;
-    title.textContent = state.raceTitle || 'みんなで競馬カップ';
+    title.textContent = state.raceTitle || 'カップ';
     
     const subtitle = document.createElement('div');
     subtitle.style.cssText = `
@@ -1411,10 +1412,10 @@
       state.seed=v.seed||0;
       state.trackLen=v.trackLen||400;
       state.totalLaps=v.totalLaps||3;
-      state.raceTitle=v.raceTitle||'みんなで競馬カップ';
+      state.raceTitle=v.raceTitle||'カップ';
       const suffixes=['賞','カップ','ステークス'];
       state.raceSuffix=suffixes.find(s=>state.raceTitle.endsWith(s))||'カップ';
-      state.racePrefix=state.raceTitle.slice(0,state.raceTitle.length-state.raceSuffix.length)||'みんなで競馬';
+      state.racePrefix=state.raceTitle.slice(0,state.raceTitle.length-state.raceSuffix.length);
       state.abandoned=v.abandoned||null;
 
       if(wasStarted && !state.started){
@@ -1433,6 +1434,7 @@
         $.raceSuffix.value = state.raceSuffix;
       }
       if($.raceHeader) $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
+      updateReadyButtonState();
       
       if(!state.isHost && !wasStarted && state.started) {
         sim.start();
@@ -1739,7 +1741,7 @@
       if(state.isHost){
         // レース設定を取得
         state.totalLaps = parseInt($.totalLaps?.value) || 3;
-        state.racePrefix = $.racePrefix?.value?.trim() || 'みんなで競馬';
+        state.racePrefix = $.racePrefix?.value?.trim() || '';
         state.raceSuffix = $.raceSuffix?.value || 'カップ';
         state.raceTitle = state.racePrefix + state.raceSuffix;
 
@@ -1757,10 +1759,10 @@
         if(state.lobby) {
           state.seed = state.lobby.seed || 0;
           state.totalLaps = state.lobby.totalLaps || 3;
-          state.raceTitle = state.lobby.raceTitle || 'みんなで競馬カップ';
+          state.raceTitle = state.lobby.raceTitle || 'カップ';
           const suffixes=['賞','カップ','ステークス'];
           state.raceSuffix=suffixes.find(s=>state.raceTitle.endsWith(s))||'カップ';
-          state.racePrefix=state.raceTitle.slice(0,state.raceTitle.length-state.raceSuffix.length)||'みんなで競馬';
+          state.racePrefix=state.raceTitle.slice(0,state.raceTitle.length-state.raceSuffix.length);
         }
       }
       
@@ -2340,23 +2342,17 @@
   if($.racePrefix && $.raceSuffix) {
     const syncTitle = () => {
       if(!state.isHost) return; // ホストのみ変更可能
-      state.racePrefix = $.racePrefix.value.trim() || 'みんなで競馬';
+      state.racePrefix = $.racePrefix.value.trim();
       state.raceSuffix = $.raceSuffix.value;
       state.raceTitle = state.racePrefix + state.raceSuffix;
       $.raceHeader.textContent = `${state.raceTitle} (${state.totalLaps}周制)`;
       if(state.net && state.lobbyCode) {
         R('lobbies/'+state.lobbyCode).update({ raceTitle: state.raceTitle });
       }
+      updateReadyButtonState();
     };
     $.racePrefix.addEventListener('input', syncTitle);
     $.raceSuffix.addEventListener('change', syncTitle);
-    $.racePrefix.addEventListener('blur', () => {
-      if(!state.isHost) return;
-      if(!$.racePrefix.value.trim()) {
-        $.racePrefix.value = 'みんなで競馬';
-        syncTitle();
-      }
-    });
   }
 
   if($.totalLaps) {

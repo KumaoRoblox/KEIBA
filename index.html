@@ -423,7 +423,7 @@
           <div class="row">
             <button id="createLobbyBtn">＋ ロビー作成</button>
             <div class="row">
-              <input type="text" id="joinCode" placeholder="4桁コード" style="max-width:120px" />
+              <input type="text" id="joinCode" inputmode="numeric" pattern="[0-9]*" placeholder="4桁コード" style="max-width:120px" />
               <button id="joinLobbyBtn" class="secondary">参加</button>
             </div>
           </div>
@@ -466,53 +466,53 @@
           <div class="col" id="horseAdjustments">
             <h3 style="margin:8px 0 4px 0; font-size:14px">馬の能力調整</h3>
             <div id="statsPoints" style="text-align:center; font-size:16px; font-weight:bold; color:var(--accent); margin-bottom:8px">
-              残りポイント: <span id="remainingPoints">100</span> / 100
+              残りポイント: <span id="remainingPoints">200</span> / 200
             </div>
             <div class="adjustments-container">
               <div class="slider">
                 <div>最高速度</div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button type="button" class="adjust-btn" data-target="sTop" data-delta="-1">−</button>
-                  <input type="range" id="sTop" min="0" max="100" step="1" value="20">
+                  <input type="range" id="sTop" min="0" max="100" step="1" value="40">
                   <button type="button" class="adjust-btn" data-target="sTop" data-delta="1">＋</button>
                 </div>
-                <div><span id="vTop">20</span> pt</div>
+                <div><span id="vTop">40</span> pt</div>
               </div>
               <div class="slider">
                 <div>加速度</div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button type="button" class="adjust-btn" data-target="sAcc" data-delta="-1">−</button>
-                  <input type="range" id="sAcc" min="0" max="100" step="1" value="20">
+                  <input type="range" id="sAcc" min="0" max="100" step="1" value="40">
                   <button type="button" class="adjust-btn" data-target="sAcc" data-delta="1">＋</button>
                 </div>
-                <div><span id="vAcc">20</span> pt</div>
+                <div><span id="vAcc">40</span> pt</div>
               </div>
               <div class="slider">
                 <div>スタミナ</div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button type="button" class="adjust-btn" data-target="sSta" data-delta="-1">−</button>
-                  <input type="range" id="sSta" min="0" max="100" step="1" value="20">
+                  <input type="range" id="sSta" min="0" max="100" step="1" value="40">
                   <button type="button" class="adjust-btn" data-target="sSta" data-delta="1">＋</button>
                 </div>
-                <div><span id="vSta">20</span> pt</div>
+                <div><span id="vSta">40</span> pt</div>
               </div>
               <div class="slider">
                 <div>コーナー</div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button type="button" class="adjust-btn" data-target="sCorner" data-delta="-1">−</button>
-                  <input type="range" id="sCorner" min="0" max="100" step="1" value="20">
+                  <input type="range" id="sCorner" min="0" max="100" step="1" value="40">
                   <button type="button" class="adjust-btn" data-target="sCorner" data-delta="1">＋</button>
                 </div>
-                <div><span id="vCorner">20</span> pt</div>
+                <div><span id="vCorner">40</span> pt</div>
               </div>
               <div class="slider">
                 <div>末脚</div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button type="button" class="adjust-btn" data-target="sFinish" data-delta="-1">−</button>
-                  <input type="range" id="sFinish" min="0" max="100" step="1" value="20">
+                  <input type="range" id="sFinish" min="0" max="100" step="1" value="40">
                   <button type="button" class="adjust-btn" data-target="sFinish" data-delta="1">＋</button>
                 </div>
-                <div><span id="vFinish">20</span> pt</div>
+                <div><span id="vFinish">40</span> pt</div>
               </div>
               <div class="slider">
                 <div>馬の色</div>
@@ -628,7 +628,7 @@
     $.colorBox.style.background = $.hColor.value;
     
     const totalUsed = (+$.sTop.value) + (+$.sAcc.value) + (+$.sSta.value) + (+$.sCorner.value) + (+$.sFinish.value);
-    const remaining = 100 - totalUsed;
+    const remaining = 200 - totalUsed;
     
     if($.remainingPoints) {
       $.remainingPoints.textContent = remaining;
@@ -649,7 +649,7 @@
   function updateReadyButtonState() {
     if($.ready) {
       const hasRaceName = state.racePrefix.trim().length > 0;
-      const canReady = state.me.saved && !state.started && hasRaceName;
+      const canReady = state.me.saved && !state.started && (!state.isHost || hasRaceName);
       $.ready.disabled = !canReady;
       $.ready.style.opacity = canReady ? '1' : '0.5';
     }
@@ -993,13 +993,16 @@
     
     return ids.every(id => {
       const player = ps[id];
-      if(!player || !player.ready) return false;
-      
+      if(!player) return false;
+
+      const ready = id === uid ? state.me.ready : player.ready;
+      if(!ready) return false;
+
       if(player.horse?.points) {
-        const totalPoints = player.horse.points.speed + player.horse.points.accel + 
-                           player.horse.points.stamina + player.horse.points.corner + 
+        const totalPoints = player.horse.points.speed + player.horse.points.accel +
+                           player.horse.points.stamina + player.horse.points.corner +
                            player.horse.points.finish;
-        return totalPoints === 100;
+        return totalPoints === 200;
       }
       return true;
     });
@@ -1007,8 +1010,8 @@
   
   function updateStartVisibility(){ 
     // ホストの準備状態をFirebaseから直接確認
-    const hostReady = state.players && state.players[uid] && state.players[uid].ready;
-    const show = state.isHost && everyoneReady() && !state.started && !state.abandoned && 
+    const hostReady = state.players?.[uid]?.ready ?? state.me.ready;
+    const show = state.isHost && everyoneReady() && !state.started && !state.abandoned &&
                  state.lobbyCode && hostReady;
     
     if($.start) {

@@ -1874,7 +1874,7 @@
           const accelPenalty = Math.max(0, (adjustedAccel - 1) * 0.2);
           staminaCost += accelPenalty;
 
-          const staminaDecrease = staminaCost * dt * 15;
+          const staminaDecrease = staminaCost * dt * 30;
           if(!isNaN(staminaDecrease)) {
             H.s -= staminaDecrease;
             H.s = Math.max(0, H.s);
@@ -2081,6 +2081,7 @@
     const trackWidth = trackHeight * 0.6;
     const radius = trackWidth / 2;
     const straightLength = trackHeight - trackWidth; // 上下の半円を除いた直線部分
+    const halfStraight = straightLength / 2;
 
     const laneCount = lanes.length;
     const laneSpacing = Math.min(12*dpr, radius * 0.15);
@@ -2088,18 +2089,16 @@
     // コース描画
     for(let i = 0; i <= laneCount; i++) {
       const r = radius - i * laneSpacing;
-      const s = straightLength - 2 * i * laneSpacing;
-      const halfS = s / 2;
 
-      if(r > 0 && s >= 0) {
+      if(r > 0) {
         ctx.strokeStyle = i === 0 ? 'rgba(108,255,128,.6)' : 'rgba(255,255,255,.15)';
         ctx.lineWidth = i === 0 ? 4*dpr : 1*dpr;
         ctx.beginPath();
-        ctx.moveTo(centerX + r, centerY - halfS);
-        ctx.lineTo(centerX + r, centerY + halfS);
-        ctx.arc(centerX, centerY + halfS, r, 0, Math.PI, false); // 下側半円
-        ctx.lineTo(centerX - r, centerY - halfS);
-        ctx.arc(centerX, centerY - halfS, r, Math.PI, 0, false); // 上側半円
+        ctx.moveTo(centerX + r, centerY - halfStraight);
+        ctx.lineTo(centerX + r, centerY + halfStraight);
+        ctx.arc(centerX, centerY + halfStraight, r, 0, Math.PI, false); // 下側半円
+        ctx.lineTo(centerX - r, centerY - halfStraight);
+        ctx.arc(centerX, centerY - halfStraight, r, Math.PI, 0, false); // 上側半円
         ctx.closePath();
         ctx.stroke();
       }

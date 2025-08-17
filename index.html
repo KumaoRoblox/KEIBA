@@ -1088,6 +1088,26 @@
     }catch(e){ console.warn('presence setup failed', e); }
   }
 
+  function cancelPresence(){
+    if(!state.net || !state.lobbyCode) return;
+    try{
+      const pref=R('lobbies/'+state.lobbyCode+'/players/'+uid);
+      if(pref) pref.onDisconnect().cancel();
+      if(state.isHost){
+        const lref=R('lobbies/'+state.lobbyCode);
+        if(lref){
+          lref.child('started').onDisconnect().cancel();
+          lref.child('abandoned').onDisconnect().cancel();
+        }
+        const refs=['state','results'];
+        refs.forEach(ref=>{
+          const r=R('lobbies/'+state.lobbyCode+'/'+ref);
+          if(r) r.onDisconnect().cancel();
+        });
+      }
+    }catch(e){ console.warn('presence cancel failed', e); }
+  }
+
   async function upsertMe(newMood = false){
     if(state.started){ 
       ensurePresence(); 
@@ -1540,7 +1560,9 @@
 
   function resetLobbyState() {
     console.log('Resetting lobby state');
-    
+
+    cancelPresence();
+
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
       clearTimeout(state.emptyLobbyTimeout);
@@ -1586,9 +1608,11 @@
     console.log('Lobby state reset completed');
   }
 
-  async function leaveLobby(){ 
+  async function leaveLobby(){
     console.log('Leaving lobby...');
-    
+
+    cancelPresence();
+
     // タイマーをクリア
     if(state.emptyLobbyTimeout) {
       clearTimeout(state.emptyLobbyTimeout);
